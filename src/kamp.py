@@ -178,8 +178,22 @@ class KAMP(BaseEstimator):
         return x_ + G @ r_ # n × 1
 
     def _update_covariance(self, G: NDArray, P_: NDArray) -> NDArray:
-        """Update covariance matrix."""
-        return (np.eye(self.n) - G @ self.A) @ P_
+        """Update covariance matrix: P_{[t]} = (I_n - G_{[t]} * A) * P_{[t]}^{-}.
+        
+        Parameters
+        ----------
+        G : NDArray, shape(n, m)
+            Kalamn gain.
+        P_ : NDArray, shape(n, n)
+            Prior covariance matrix.
+        
+        Returns
+        -------
+        NDArray, shape(n, n)
+            Updated covariance.
+        """
+        P = (self.I_n - G @ self.A) @ P_
+        return np.clip(P, -1e6, 1e6) # Clip to avoid overflow
 
     def _update_process_noise_covariance(self, G: NDArray, r_: NDArray) -> NDArray:
         """Update process noise covariance."""
