@@ -36,7 +36,24 @@ class Node:
 class MyGraph(nx.DiGraph):
     """Directed acyclic graph for distributed computation."""
     
-    def total_in_degree(self, node: Node, inplace: bool = True) -> 'MyGraph':
+    def __rshift__(self, node):
+        """Normalize incoming weights."""
+        total_weight = self.in_degree(node, weight='weight')
+        for j in self.predecessors(node):
+            self[j][node]['weight']/=total_weight
+    
+    def __lshift__(self, node):
+        """Normalize outgoing weights."""
+        total_weight = self.out_degree(node, weight='weight')
+        for i in self.successors(node):
+            self[node][i]['weight']/=total_weight
+        return self.successors(node)
+    
+    def add_edges_from_list(self, edges):
+        for node1, node2, weight in edges:
+            self.add_edge(node1, node2, x=node1.x, weight=weight)
+    
+    def total_in_degree(self, node: Node, inplace: bool = True, **attr) -> 'MyGraph':
         """
         Aggregate estimates and covariances from predecessors.
 
@@ -57,16 +74,17 @@ class MyGraph(nx.DiGraph):
         if self.in_degree(node) == 0:
             self.nodes[node]['x'] = self.nodes[node].get('x', node.x)
             self.nodes[node]['P'] = self.nodes[node].get('P', node.P)
-            return self
+            return self # self.nodes[node]['x']
         
-        # Normalize incoming weights
-        total_weight = self.in_degree(node, weight='weight')
-        if total_weight > 0:
-            for j in self.predecessors(node):
-                self[node][j]['weight'] /= total_weight
+        #--------------- Normalize incoming -------------- 
+        self >> node
+        # total_weight = self.in_degree(node, weight='weight')
+        # if total_weight > 0:
+        #     for j in self.predecessors(node):
+        #         self[node][j]['weight'] /= total_weight
         
-        # Aggregate messages
-        for u, v, data in self.in_edges(node, data=True):
+        #---------------- Aggregate messages ---------------
+        for u, v, data in self.in_edges(node, data=True, **attr):
             w = data.get('weight', 0)
             total_x += w * data.get('x', 0)
             total_P += w * data.get('P', u.P)
