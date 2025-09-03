@@ -54,7 +54,7 @@ def create_strongly_connected_graph(num_nodes    : int,
     
     return G
 
-
+create_strongly_connected_dag = create_strongly_connected_graph
 if __name__ == "__main__":
     for i in range(1):
         G_nx = create_strongly_connected_graph(5, 0.1,42)
