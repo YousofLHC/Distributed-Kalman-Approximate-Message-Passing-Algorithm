@@ -196,8 +196,23 @@ class KAMP(BaseEstimator):
         return np.clip(P, -1e6, 1e6) # Clip to avoid overflow
 
     def _update_process_noise_covariance(self, G: NDArray, r_: NDArray) -> NDArray:
-        """Update process noise covariance."""
-        return self.alpha * self.Q + (1 - self.alpha) * (G @ r_) @ (G @ r_).T
+        """Update process noise covariance: Q_{[t]} = α * Q_{[t-1]} + (1-α) * (G_{[t]} * r_{[t]}^{-}) * (G_{[t]} * r_{[t]}^{-})^T.
+        
+        Parameters
+        ----------
+        G : NDArray, shape(n, m)
+            Kalman gain.
+        r_ : NDArray, shape(m, 1)
+            Prior residual
+            
+        Returns
+        -------
+        NDArray, shape(n, n)
+            Updated process noise covariance.
+        """
+        Gv_ = G @ r_            # shape(n, 1)
+        Q   = self.alpha * self.Q + (1 - self.alpha) * (Gv_) @ (Gv_.T)
+        return np.clip(Q, -1e6, 1e6) # Clip to avoid overflow
 
     def solve(self) -> NDArray:
         """
