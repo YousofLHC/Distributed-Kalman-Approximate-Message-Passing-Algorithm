@@ -151,6 +151,11 @@ class KAMP(BaseEstimator):
         NDArray, shape(n, m)
             Kalman gain.
         """ 
+        P_AT   = P_ @ self.AT                             # shape(n, m)
+        matrix = self.A @ P_AT + R
+        epsilon = 1e-6  # Small regularization to stabilize inverse
+        matrix_reg = matrix + epsilon * np.eye(matrix.shape[0])
+        return P_AT @ np.linalg.pinv(matrix_reg) # shape(n, m)
         return P_ @ self.A.T @ np.linalg.inv(self.A @ P_ @ self.A.T + R)
 
     def _update_prior_residual(self, x_: NDArray) -> NDArray:
