@@ -1,6 +1,6 @@
 import numpy as np
 from sklearn.base import BaseEstimator
-from sklearn.utils.validation import check_is_fitted
+from sklearn.utils.validation import check_is_fitted, check_array
 from typing import Optional, Callable, Tuple
 from numpy.typing import NDArray    
 
@@ -66,18 +66,38 @@ class KAMP(BaseEstimator):
         self : KAMP
             Fitted estimator.
         """
-        self.A = check_array(A)
-        self.y = check_array(y, ensure_2d=False).reshape(-1, 1)
-        self.m, self.n = self.A.shape
-        self.x = np.zeros((self.n, 1))
-        self.P = np.eye(self.n)
-        self.Q = np.eye(self.n)
-        self.R = np.eye(self.m)
-        self.is_fitted_ = True
+        #-------------------- Problem Data Information -------------
+        
+        self.A            = check_array(A) # Sensing matrix, A ∈ ℝ^{m×n}
+        self.AT           = self.A.T
+        self.y            = check_array(y, ensure_2d=False).reshape(-1, 1) # Observations, y ∈ ℝ^{m×1}
+        self.m, self.n    = self.A.shape # (samples, features)
+        self.sigma2       = min(self.m,self.n)/max(self.m,self.n)# Noise variance, σ^2 = min(m,n)/max(m,n)
+        
+        #-------------------- Algorithm Initial Step -------------
+        
+        self.x            = np.clip(np.random.normal(loc=0.5, scale=0.1, size=(self.n, 1)), 0, 1) # Initialize signal estimate with random values clipped to [0,1]
+        self.I_n          = np.eye(self.n) # Identity matrix, I_n ∈ ℝ^{n×n}
+        self.z            = self.y # Initial residual, z_{[0]} = y - A * x̂_{[0]}
+        self._P           = 1.5 * self.I_n # Initial covariance matrix, P_{[0]} = 1.5 * I_n # Initial covariance matrix, smaller value to avoid overflow
+        self.Q            = 0.1 * self.I_n # Initial process noise covariance, Q_{[0]} = 0.1 * I_n
+        self.R            = self.sigma2 * np.eye(self.m) # Measurement noise covariance, R= σ^2 * I_m
+        self.is_fitted_   = True
         return self
 
     def _update_prior_estimation(self, r: NDArray) -> NDArray:
-        """Compute prior estimate."""
+        """Compute prior estimate: x̂_{[t]}^{-} = η(r_{[t-1]}; τ).
+        
+        Parameters
+        ----------
+        r : NDArray, shape(n, 1)
+            Residual.
+        
+        Returns
+        -------
+        NDArray, shape(n, 1)
+            Prior estimate.
+        """
         return self.denoiser(r, self.tau)
 
     def _update_jacobian(self, r: NDArray) -> NDArray:
