@@ -117,8 +117,24 @@ class KAMP(BaseEstimator):
         return np.diag(d) @ (self.I_n - self.AT @ self.A) # shape(n, n)
 
     def _update_prior_covariance(self, J: NDArray, P: NDArray, Q: NDArray) -> NDArray:
-        """Update prior covariance."""
-        return J @ P @ J.T + Q
+        """Update prior covariance matrix: P_{[t]}^{-} = J_η * P_{[t-1]} * J_η^T + Q_{[t-1]}.
+        
+        Parameters
+        ----------
+        J : NDArray, shape(n, n)
+            Jacobian matrix.
+        P : NDArray, shape(n, n)
+            Previous covariance matrix.
+        Q : NDArray, shape(n, n)
+            Process noise covariance.
+        
+        Returns
+        -------
+        NDArray, shape(n, n)
+            Updated prior covariance
+        """
+        P_ = J @ P @ J.T + Q  # n × n
+        return np.clip(P_, -1e6, 1e6) # Clip to prevent overflow in large matrices
 
     def _update_kalman_gain(self, P_: NDArray, R: NDArray) -> NDArray:
         """Compute Kalman gain."""
