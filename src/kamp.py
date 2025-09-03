@@ -159,7 +159,18 @@ class KAMP(BaseEstimator):
         return P_ @ self.A.T @ np.linalg.inv(self.A @ P_ @ self.A.T + R)
 
     def _update_prior_residual(self, x_: NDArray) -> NDArray:
-        """Compute prior residual."""
+        """Compute prior residual: r_{[t]}^{-} = y - A * x̂_{[t]}^{-}.
+        
+        Parameters
+        ----------
+        x_ : NDArray, shape(n, 1)
+            Prior estimate.
+            
+        Returns
+        -------
+        NDArray, shape(m, 1)
+            Prior residual.
+        """
         return self.y - self.A @ x_
 
     def _update_estimation(self, x_: NDArray, G: NDArray, r_: NDArray) -> NDArray:
