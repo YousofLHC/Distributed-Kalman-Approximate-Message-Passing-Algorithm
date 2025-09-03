@@ -174,8 +174,8 @@ class KAMP(BaseEstimator):
         return self.y - self.A @ x_
 
     def _update_estimation(self, x_: NDArray, G: NDArray, r_: NDArray) -> NDArray:
-        """Update state estimate."""
-        return x_ + G @ r_
+        """Update state estimate: x̂_{[t]} = x̂_{[t]}^{-} + G_{[t]} * (y - A * x̂_{[t]}^{-})."""
+        return x_ + G @ r_ # n × 1
 
     def _update_covariance(self, G: NDArray, P_: NDArray) -> NDArray:
         """Update covariance matrix."""
