@@ -232,6 +232,12 @@ class KAMP(BaseEstimator):
         """
         return x_prev + self.AT @ z_prev
     
+    @property
+    def P(self):
+        return self._P
+    @P.setter
+    def P(self, value):
+        self._P=value
     
     def solve(self) -> NDArray:
         """
