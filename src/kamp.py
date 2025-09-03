@@ -101,8 +101,20 @@ class KAMP(BaseEstimator):
         return self.denoiser(r, self.tau)
 
     def _update_jacobian(self, r: NDArray) -> NDArray:
-        """Compute Jacobian of denoising function."""
-        return np.diag(self.subdif_denoiser(r, self.tau).flatten()) @ (np.eye(self.n) - self.A.T @ self.A)
+        """Compute Jacobian of denoising function: J_η = diag(η'(r)) * (I_n - A^T * A).
+        
+        Parameters
+        ---------
+        r : NDArray, shape(n, 1)
+            Residual.
+        
+        Returns
+        -------
+        NDArray, shape(n, n)
+            Jacobian matrix.
+        """
+        d = self.subdif_denoiser(r, self.tau).flatten() # shape(n, )
+        return np.diag(d) @ (self.I_n - self.AT @ self.A) # shape(n, n)
 
     def _update_prior_covariance(self, J: NDArray, P: NDArray, Q: NDArray) -> NDArray:
         """Update prior covariance."""
