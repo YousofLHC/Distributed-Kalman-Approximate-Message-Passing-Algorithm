@@ -137,7 +137,20 @@ class KAMP(BaseEstimator):
         return np.clip(P_, -1e6, 1e6) # Clip to prevent overflow in large matrices
 
     def _update_kalman_gain(self, P_: NDArray, R: NDArray) -> NDArray:
-        """Compute Kalman gain."""
+        """Compute Kalman gain: G_{[t]} = P_{[t]}^{-} * A^T * (A * P_{[t]}^{-} * A^T + R)^{-1}.
+        
+        Parameters
+        ----------
+        P_ : NDArray, shape(n, n)
+            Prior covariance matrix.
+        R : NDArray, shape(m, m)
+            Measurement noise covariance.
+            
+        Returns
+        -------
+        NDArray, shape(n, m)
+            Kalman gain.
+        """ 
         return P_ @ self.A.T @ np.linalg.inv(self.A @ P_ @ self.A.T + R)
 
     def _update_prior_residual(self, x_: NDArray) -> NDArray:
