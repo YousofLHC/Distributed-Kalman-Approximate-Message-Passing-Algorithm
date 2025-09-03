@@ -3,7 +3,7 @@ from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_is_fitted, check_array
 from typing import Optional, Callable, Tuple
 from numpy.typing import NDArray    
-
+from tqdm import tqdm
 class KAMP(BaseEstimator):
     """
     Kalman-based Approximate Message Passing (KAMP) for compressed sensing.
@@ -85,7 +85,7 @@ class KAMP(BaseEstimator):
         self.is_fitted_   = True
         return self
 
-    def _update_prior_estimation(self, r: NDArray) -> NDArray:
+    def __update_prior_estimation(self, r: NDArray) -> NDArray:
         """Compute prior estimate: x̂_{[t]}^{-} = η(r_{[t-1]}; τ).
         
         Parameters
@@ -100,7 +100,7 @@ class KAMP(BaseEstimator):
         """
         return self.denoiser(r, self.tau)
 
-    def _update_jacobian(self, r: NDArray) -> NDArray:
+    def __update_jacobian(self, r: NDArray) -> NDArray:
         """Compute Jacobian of denoising function: J_η = diag(η'(r)) * (I_n - A^T * A).
         
         Parameters
@@ -116,7 +116,7 @@ class KAMP(BaseEstimator):
         d = self.subdif_denoiser(r, self.tau).flatten() # shape(n, )
         return np.diag(d) @ (self.I_n - self.AT @ self.A) # shape(n, n)
 
-    def _update_prior_covariance(self, J: NDArray, P: NDArray, Q: NDArray) -> NDArray:
+    def __update_prior_covariance(self, J: NDArray, P: NDArray, Q: NDArray) -> NDArray:
         """Update prior covariance matrix: P_{[t]}^{-} = J_η * P_{[t-1]} * J_η^T + Q_{[t-1]}.
         
         Parameters
@@ -136,7 +136,7 @@ class KAMP(BaseEstimator):
         P_ = J @ P @ J.T + Q  # n × n
         return np.clip(P_, -1e6, 1e6) # Clip to prevent overflow in large matrices
 
-    def _update_kalman_gain(self, P_: NDArray, R: NDArray) -> NDArray:
+    def __update_kalman_gain(self, P_: NDArray, R: NDArray) -> NDArray:
         """Compute Kalman gain: G_{[t]} = P_{[t]}^{-} * A^T * (A * P_{[t]}^{-} * A^T + R)^{-1}.
         
         Parameters
@@ -158,7 +158,7 @@ class KAMP(BaseEstimator):
         return P_AT @ np.linalg.pinv(matrix_reg) # shape(n, m)
         return P_ @ self.A.T @ np.linalg.inv(self.A @ P_ @ self.A.T + R)
 
-    def _update_prior_residual(self, x_: NDArray) -> NDArray:
+    def __update_prior_residual(self, x_: NDArray) -> NDArray:
         """Compute prior residual: r_{[t]}^{-} = y - A * x̂_{[t]}^{-}.
         
         Parameters
@@ -173,11 +173,11 @@ class KAMP(BaseEstimator):
         """
         return self.y - self.A @ x_
 
-    def _update_estimation(self, x_: NDArray, G: NDArray, r_: NDArray) -> NDArray:
+    def __update_estimation(self, x_: NDArray, G: NDArray, r_: NDArray) -> NDArray:
         """Update state estimate: x̂_{[t]} = x̂_{[t]}^{-} + G_{[t]} * (y - A * x̂_{[t]}^{-})."""
         return x_ + G @ r_ # n × 1
 
-    def _update_covariance(self, G: NDArray, P_: NDArray) -> NDArray:
+    def __update_covariance(self, G: NDArray, P_: NDArray) -> NDArray:
         """Update covariance matrix: P_{[t]} = (I_n - G_{[t]} * A) * P_{[t]}^{-}.
         
         Parameters
@@ -195,7 +195,7 @@ class KAMP(BaseEstimator):
         P = (self.I_n - G @ self.A) @ P_
         return np.clip(P, -1e6, 1e6) # Clip to avoid overflow
 
-    def _update_process_noise_covariance(self, G: NDArray, r_: NDArray) -> NDArray:
+    def __update_process_noise_covariance(self, G: NDArray, r_: NDArray) -> NDArray:
         """Update process noise covariance: Q_{[t]} = α * Q_{[t-1]} + (1-α) * (G_{[t]} * r_{[t]}^{-}) * (G_{[t]} * r_{[t]}^{-})^T.
         
         Parameters
@@ -214,6 +214,25 @@ class KAMP(BaseEstimator):
         Q   = self.alpha * self.Q + (1 - self.alpha) * (Gv_) @ (Gv_.T)
         return np.clip(Q, -1e6, 1e6) # Clip to avoid overflow
 
+    
+    def __update_r(self, x_prev: NDArray, z_prev: NDArray)-> NDArray:
+        """Compute residual: r_{[t-1]} = x̂_{[t-1]} + A^T * z_{[t-1]}.
+        
+        Parameters
+        ----------
+        x_prev : NDArray, shape(n, 1)
+            Previous estimate.
+        z_prev : NDArray, shape(m, 1)
+            Previous residual.
+            
+        Returns
+        -------
+        NDArray, shape(n, 1)
+            Updated residual.
+        """
+        return x_prev + self.AT @ z_prev
+    
+    
     def solve(self) -> NDArray:
         """
         Solve the sparse signal recovery problem.
@@ -224,21 +243,29 @@ class KAMP(BaseEstimator):
             Estimated signal.
         """
         check_is_fitted(self, "is_fitted_")
-        x_prev = np.copy(self.x)
-        for _ in range(self.max_iter):
-            # Prediction phase
-            r = self.y - self.A @ self.x
-            x_ = self._update_prior_estimation(r)
-            J = self._update_jacobian(r)
-            P_ = self._update_prior_covariance(J, self.P, self.Q)
-            # Correction phase
-            G = self._update_kalman_gain(P_, self.R)
-            r_ = self._update_prior_residual(x_)
-            self.x = self._update_estimation(x_, G, r_)
-            self.P = self._update_covariance(G, P_)
-            self.Q = self._update_process_noise_covariance(G, r_)
-            # Check convergence
+        for _ in (des:=tqdm(range(self.max_iter),ascii=True, leave=False,colour='blue')):#range(self.max_iter):
+            
+            #--------------------------Prediction phase(Thresholding phase)------------------------------
+            des.set_description(f'\33[31m[Thresholding phase]\33[33m')
+            
+            x_prev = np.copy(self.x) # Store previous estimate,                                   x̂_{[t-1]}
+            r      = self.__update_r(x_prev,self.z) # Compute r_{[t-1]}                          = x̂_{[t-1]} + A^T * z_{[t-1]}
+            x_     = self.__update_prior_estimation(r) # Compute prior estimate,                   x̂_{[t]}^{-} = η(r_{[t-1]}; τ)
+            J      = self.__update_jacobian(r) # Compute Jacobian,                                 J_η          = diag(η'(r)) * (I_n - A^T * A)
+            P_     = self.__update_prior_covariance(J, self._P, self.Q) # Update prior covariance, P_{[t]}^{-}  = J_η * P_{[t-1]} * J_η^T + Q_{[t-1]}
+            
+            #--------------------------Correction phase(Correction phase)------------------------------
+            des.set_description(f'\33[32m[Correction]\33[33m')
+            
+            G       = self.__update_kalman_gain(P_, self.R) # Compute Kalman gain,          G_{[t]}     = P_{[t]}^{-} * A^T * (A * P_{[t]}^{-} * A^T + R)^{-1}
+            r_      = self.__update_prior_residual(x_) # Compute prior residual,            r_{[t]}^{-} = y - A * x̂_{[t]}^{-}
+            self.x  = self.__update_estimation(x_, G, r_) # Update estimate,                x̂_{[t]}    = x̂_{[t]}^{-} + G_{[t]} * (y - A * x̂_{[t]}^{-})
+            self._P = self.__update_covariance(G, P_) # Update covariance,                  P_{[t]}     = (I_n - G_{[t]} * A) * P_{[t]}^{-}
+            self.Q  = self.__update_process_noise_covariance(G, r_) # Update process noise, Q_{[t]}     = α * Q_{[t-1]} + (1-α) * (G_{[t]} * r_{[t]}^{-}) * (G_{[t]} * r_{[t]}^{-})^T
+            self.z  = self.y - self.A @ self.x # Update residual,                          z_{[t]}     = y - A * x̂_{[t]}^{-}
+
+            #--------------------------Check convergence------------------------------
+            
             if np.linalg.norm(self.x - x_prev) / (np.linalg.norm(x_prev) + 1e-10) < self.tol:
                 break
-            x_prev = np.copy(self.x)
         return self.x
