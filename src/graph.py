@@ -24,6 +24,14 @@ class Node:
         if hasattr(self.estimator, attr):
             return getattr(self.estimator, attr)
         raise AttributeError(f"Node and its `estimator` have no attribute '{attr}'")
+    
+    
+    @property
+    def index(self):
+         return self._id
+    @property 
+    def id(self):
+        return self._id
 
 class MyGraph(nx.DiGraph):
     """Directed acyclic graph for distributed computation."""
