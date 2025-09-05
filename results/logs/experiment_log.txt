@@ -1,0 +1,36 @@
+Timestamp: Fri Sep  5 10:15:21 2025
+Distributed KAMP (Uniform): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------
+Timestamp: Fri Sep  5 10:15:35 2025
+Distributed KAMP (Varying): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------
+Timestamp: Fri Sep  5 10:16:22 2025
+Distributed KAMP (Uniform): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------
+Timestamp: Fri Sep  5 10:16:36 2025
+Distributed KAMP (Varying): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------
+Timestamp: Fri Sep  5 10:18:02 2025
+Distributed KAMP (Uniform): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------
+Timestamp: Fri Sep  5 10:18:22 2025
+Distributed KAMP (Varying): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------
+Timestamp: Fri Sep  5 11:08:30 2025
+Distributed KAMP (Uniform): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------
+Timestamp: Fri Sep  5 11:08:41 2025
+Distributed KAMP (Varying): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------
+Timestamp: Fri Sep  5 11:33:19 2025
+Distributed KAMP (Uniform): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------
+Timestamp: Fri Sep  5 11:33:29 2025
+Distributed KAMP (Varying): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------
+Timestamp: Fri Sep  5 13:15:11 2025
+Distributed KAMP (Uniform): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------
+Timestamp: Fri Sep  5 13:15:23 2025
+Distributed KAMP (Varying): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------

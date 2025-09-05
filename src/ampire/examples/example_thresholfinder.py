@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.datasets import make_blobs
-from enet_convex_hull import EnetConvexHull, ThresholdFinder
+from ampire.core.enet_convex_hull import EnetConvexHull, ThresholdFinder
 
 # Generate synthetic data
 np.random.seed(42)

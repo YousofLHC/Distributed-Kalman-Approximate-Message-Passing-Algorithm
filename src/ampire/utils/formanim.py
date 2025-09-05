@@ -4,7 +4,7 @@ from itertools import count
 from typing import List, Union
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
-from kamp import KAMP  # فرض می‌کنیم KAMP در kamp.py پیاده‌سازی شده است
+from ampire.core.kamp import KAMP  # فرض می‌کنیم KAMP در kamp.py پیاده‌سازی شده است
 
 class Node:
     """Node class for graph-based distributed computation."""

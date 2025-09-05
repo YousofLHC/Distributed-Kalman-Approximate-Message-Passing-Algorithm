@@ -1,9 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from kamp import KAMP
-from distributed_kamp import DistributedKAMP
-from visualization import plot_signal_comparison
-from metrics import calculate_metrics, log_results
+from ampire.core.kamp import KAMP
+from ampire.distributed.distributed_kamp import DistributedKAMP
+from ampire.utils.visualization import plot_signal_comparison
+from ampire.utils.metrics import calculate_metrics, log_results
 
 def get_sinusoidal_data(m=400, n=50, sigma2=0.01, random_state=42):
     """Generate sinusoidal data for testing."""

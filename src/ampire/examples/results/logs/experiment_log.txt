@@ -1,0 +1,6 @@
+Timestamp: Fri Sep  5 10:13:27 2025
+Distributed KAMP (Uniform): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------
+Timestamp: Fri Sep  5 10:13:48 2025
+Distributed KAMP (Varying): AUC-ROC = nan, Time = 0.00s
+--------------------------------------------------

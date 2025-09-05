@@ -2,15 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.datasets import make_circles
 from sklearn.model_selection import GridSearchCV
-from enet_convex_hull import EnetConvexHull
+from ampire.core.enet_convex_hull import EnetConvexHull, ThresholdFinder
 from sklearn.metrics import make_scorer, roc_auc_score
-
-
-
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.datasets import make_circles
-from enet_convex_hull import EnetConvexHull, ThresholdFinder
 
 # Generate synthetic data (circles)
 np.random.seed(42)

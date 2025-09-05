@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+recursive-include src/ampire/docs *
+recursive-include src/ampire *.py
+global-exclude *.pyc
+global-exclude __pycache__

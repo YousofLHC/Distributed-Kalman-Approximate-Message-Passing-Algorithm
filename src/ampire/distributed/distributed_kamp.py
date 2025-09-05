@@ -1,9 +1,9 @@
 import numpy as np
 import networkx as nx
 from typing import List, Dict, Tuple, Union
-from kamp import KAMP
-from graph import MyGraph, Node
-from random_digraphs import create_strongly_connected_graph
+from ..core.kamp import KAMP
+from ..network.graph import MyGraph, Node
+from ..network.random_digraphs import create_strongly_connected_graph
 
 class DistributedKAMP(KAMP):
     """
@@ -69,13 +69,16 @@ class DistributedKAMP(KAMP):
         # Fit each node with its data subset
         for i, node in enumerate(self.node_estimators):
             node.fit(self.A_list[i], self.y_list[i])
+        # Add all nodes to the graph
+        for node in self.node_estimators:
+            self.my_graph.add_node(node, x=node.x, P=node.P)
         # Create edges with initialized x
         for u, v in self.graph.edges():
             weight = np.clip(self.rng.normal(loc=0.5, scale=0.1), 0, 1)
             self.my_graph.add_edge(
-                self.node_estimators[u], 
-                self.node_estimators[v], 
-                x=self.node_estimators[u].x, 
+                self.node_estimators[u],
+                self.node_estimators[v],
+                x=self.node_estimators[u].x,
                 weight=weight
             )
 
