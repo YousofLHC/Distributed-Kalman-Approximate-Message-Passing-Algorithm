@@ -6,7 +6,13 @@ import warnings
 import logging
 try:
     from mpi4py import MPI
-    MPI_AVAILABLE = True
+    # Test if MPI is actually available by trying to access COMM_WORLD
+    try:
+        _ = MPI.COMM_WORLD
+        MPI_AVAILABLE = True
+    except RuntimeError:
+        MPI_AVAILABLE = False
+        MPI = None
 except ImportError:
     MPI_AVAILABLE = False
     MPI = None

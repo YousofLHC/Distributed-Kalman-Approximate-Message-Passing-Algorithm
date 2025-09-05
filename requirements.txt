@@ -5,5 +5,6 @@ networkx>=2.6.0
 tqdm>=4.62.0
 matplotlib>=3.5.0
 qpsolvers>=1.0.0
-mpi4py>=3.1.0  # Optional: for distributed computing
-cupy>=10.0.0   # Optional: for GPU acceleration
+# Optional dependencies (install separately if needed):
+# mpi4py>=3.1.0  # For distributed computing
+# cupy>=10.0.0   # For GPU acceleration
