@@ -50,15 +50,30 @@ def calculate_anomaly_detection_metrics(y_true: np.ndarray, y_pred: np.ndarray) 
     mcc = matthews_corrcoef(y_true, y_pred)
     balanced_acc = balanced_accuracy_score(y_true, y_pred)
 
-    # Specificity
+    # Confusion matrix elements
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
+
+    # Specificity
     specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+
+    # Additional rates
+    fpr = fp / (fp + tn) if (fp + tn) > 0 else 0  # False Positive Rate
+    fnr = fn / (fn + tp) if (fn + tp) > 0 else 0  # False Negative Rate
+    fdr = fp / (fp + tp) if (fp + tp) > 0 else 0  # False Discovery Rate
+    npv = tn / (tn + fn) if (tn + fn) > 0 else 0  # Negative Predictive Value
+    for_ = fn / (fn + tn) if (fn + tn) > 0 else 0  # False Omission Rate
 
     # F2 score
     f2 = (5 * precision * recall) / (4 * precision + recall) if (4 * precision + recall) > 0 else 0
 
     # G-Mean
     g_mean = np.sqrt(recall * specificity)
+
+    # Youden's J (Bookmaker Informedness)
+    youdens_j = recall + specificity - 1
+
+    # Markedness
+    markedness = precision + npv - 1
 
     return {
         'precision': precision,
@@ -69,7 +84,14 @@ def calculate_anomaly_detection_metrics(y_true: np.ndarray, y_pred: np.ndarray) 
         'mcc': mcc,
         'balanced_accuracy': balanced_acc,
         'f2': f2,
-        'g_mean': g_mean
+        'g_mean': g_mean,
+        'fpr': fpr,
+        'fnr': fnr,
+        'fdr': fdr,
+        'for': for_,
+        'npv': npv,
+        'youdens_j': youdens_j,
+        'markedness': markedness
     }
 
 
@@ -90,10 +112,12 @@ def calculate_compressive_sensing_metrics(y_true: np.ndarray, y_pred: np.ndarray
         Dictionary containing nmse, peak_snr.
     """
     mse = np.mean((y_true - y_pred) ** 2)
+    rmse = np.sqrt(mse)
     nmse = mse / np.var(y_true) if np.var(y_true) > 0 else 0
+    snr = 10 * np.log10(np.var(y_true) / mse) if mse > 0 else float('inf')
     peak_snr = 20 * np.log10(np.max(np.abs(y_true)) / np.sqrt(mse)) if mse > 0 else float('inf')
 
-    return {'nmse': nmse, 'peak_snr': peak_snr}
+    return {'mse': mse, 'rmse': rmse, 'nmse': nmse, 'snr': snr, 'peak_snr': peak_snr}
 
 
 def calculate_gmsd(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -201,6 +225,50 @@ def calculate_vif(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     vif = np.mean((sigma_tp**2 + 0.01) / (sigma_true**2 * sigma_pred**2 + 0.01))
 
     return vif
+
+
+def calculate_ssim(y_true: np.ndarray, y_pred: np.ndarray, data_range: float = None) -> float:
+    """
+    Calculate Structural Similarity Index Measure (SSIM).
+
+    Parameters
+    ----------
+    y_true : np.ndarray
+        True image.
+    y_pred : np.ndarray
+        Predicted image.
+    data_range : float, optional
+        Data range of the input image.
+
+    Returns
+    -------
+    float
+        SSIM value.
+    """
+    if data_range is None:
+        data_range = np.max(y_true) - np.min(y_true)
+
+    # Constants
+    K1 = 0.01
+    K2 = 0.03
+    C1 = (K1 * data_range) ** 2
+    C2 = (K2 * data_range) ** 2
+
+    # Means
+    mu_true = np.mean(y_true)
+    mu_pred = np.mean(y_pred)
+
+    # Variances and covariance
+    sigma_true = np.var(y_true)
+    sigma_pred = np.var(y_pred)
+    sigma_tp = np.cov(y_true.flatten(), y_pred.flatten())[0, 1]
+
+    # SSIM
+    numerator = (2 * mu_true * mu_pred + C1) * (2 * sigma_tp + C2)
+    denominator = (mu_true**2 + mu_pred**2 + C1) * (sigma_true + sigma_pred + C2)
+
+    ssim = numerator / denominator
+    return ssim
 
 
 def calculate_phase_transition(successes: list, sparsities: list, measurement_rates: list) -> dict:
