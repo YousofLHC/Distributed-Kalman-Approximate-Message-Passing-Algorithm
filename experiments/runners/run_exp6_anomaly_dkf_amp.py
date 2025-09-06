@@ -15,7 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from ampire.utils.metrics import calculate_anomaly_detection_metrics
-from ampire.distributed.distributed_kamp import DKFAMP  # Assuming DKF-AMP class
+from ampire.distributed.distributed_kamp import DistributedKAMP  # Assuming DKF-AMP class
 from experiments.datasets.benchmark_loaders import load_odds_dataset, load_keel_dataset  # Assuming these functions exist
 
 def load_config(config_path):
@@ -49,7 +49,7 @@ def run_experiment(config):
 
             # Initialize model
             if method_name == 'DKF-AMP':
-                model = DKFAMP(**{k: v[0] if isinstance(v, list) else v for k, v in method_config['hyperparameters'].items() if k != 'kernels' and k != 'fold'})
+                model = DistributedKAMP(**{k: v[0] if isinstance(v, list) else v for k, v in method_config['hyperparameters'].items() if k != 'kernels' and k != 'fold'})
                 # Fit on normal data
                 model.fit(X_train)
                 scores = model.decision_function(X_test)
