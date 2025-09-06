@@ -11,9 +11,9 @@ class DistributedKAMP(KAMP):
     on a directed acyclic graph (DAG) with per-node measurement matrices and a shared unknown vector.
     Inherits from KAMP to reuse single-node functionality.
     """
-    def __init__(self, alpha: float, tau: float, node_max_iter: Union[int, List[int]], 
-                 num_triggers: int, graph: nx.DiGraph, A_list: List[np.ndarray], 
-                 y_list: List[np.ndarray], random_state: int = None):
+    def __init__(self, alpha: float, tau: float, node_max_iter: Union[int, List[int]],
+                 num_triggers: int, graph: nx.DiGraph, A_list: List[np.ndarray],
+                 y_list: List[np.ndarray], random_state: int = None, verbose: bool = False):
         """
         Initialize DistributedKAMP.
         
@@ -27,7 +27,7 @@ class DistributedKAMP(KAMP):
             y_list: List of observation vectors [y_1, ..., y_N].
             random_state: Random seed for reproducibility.
         """
-        super().__init__(alpha=alpha, tau=tau, max_iter=1)
+        super().__init__(alpha=alpha, tau=tau, max_iter=1, verbose=verbose)
         self.num_triggers = num_triggers
         self.graph = graph
         self.A_list = A_list
