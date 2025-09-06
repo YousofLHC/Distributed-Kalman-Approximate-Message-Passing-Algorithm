@@ -13,19 +13,21 @@ class DistributedKAMP(KAMP):
     """
     def __init__(self, alpha: float, tau: float, node_max_iter: Union[int, List[int]],
                  num_triggers: int, graph: nx.DiGraph, A_list: List[np.ndarray],
-                 y_list: List[np.ndarray], random_state: int = None, verbose: bool = False):
+                 y_list: List[np.ndarray], random_state: int = None, verbose: bool = False,
+                 just_dag: bool = False):
         """
         Initialize DistributedKAMP.
-        
+
         Args:
             alpha: Step size for KAMP updates.
             tau: Threshold for soft thresholding.
             node_max_iter: Maximum iterations for each node's KAMP algorithm (int or list of ints).
             num_triggers: Number of random node triggers.
-            graph: nx.DiGraph representing the DAG, determines number of nodes.
+            graph: nx.DiGraph representing the graph, determines number of nodes.
             A_list: List of measurement matrices [A_1, ..., A_N].
             y_list: List of observation vectors [y_1, ..., y_N].
             random_state: Random seed for reproducibility.
+            just_dag: If True, enforce that graph must be a DAG. If False, allow any directed graph. Default is False.
         """
         super().__init__(alpha=alpha, tau=tau, max_iter=1, verbose=verbose)
         self.num_triggers = num_triggers
@@ -38,7 +40,8 @@ class DistributedKAMP(KAMP):
         # Validate inputs
         self.nodes = list(graph.nodes)
         self.num_nodes = len(self.nodes)
-        if not nx.is_directed_acyclic_graph(graph):
+        self.just_dag = just_dag
+        if just_dag and not nx.is_directed_acyclic_graph(graph):
             raise ValueError("Graph must be a directed acyclic graph (DAG).")
         if len(A_list) != self.num_nodes or len(y_list) != self.num_nodes:
             raise ValueError("A_list and y_list must match the number of nodes in the graph.")
@@ -133,7 +136,7 @@ class DistributedKAMP(KAMP):
     def from_partition(cls, data: Dict[int, Tuple[np.ndarray, np.ndarray]], topology: str,
                       max_iters: int = 50, consensus_tol: float = 1e-3,
                       alpha: float = 0.5, tau: float = 0.1, num_triggers: int = 100,
-                      random_state: int = None):
+                      random_state: int = None, just_dag: bool = False):
         """
         Create DistributedKAMP from partitioned data.
 
@@ -146,6 +149,7 @@ class DistributedKAMP(KAMP):
             tau: Threshold
             num_triggers: Number of random triggers
             random_state: Random seed
+            just_dag: If True, enforce that graph must be a DAG. If False, allow any directed graph. Default is False.
 
         Returns:
             DistributedKAMP instance
@@ -175,8 +179,8 @@ class DistributedKAMP(KAMP):
             raise ValueError(f"Unknown topology: {topology}")
 
         return cls(alpha=alpha, tau=tau, node_max_iter=max_iters,
-                  num_triggers=num_triggers, graph=graph,
-                  A_list=A_list, y_list=y_list, random_state=random_state)
+                   num_triggers=num_triggers, graph=graph,
+                   A_list=A_list, y_list=y_list, random_state=random_state, just_dag=just_dag)
 
     def report(self) -> Dict:
         """

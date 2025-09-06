@@ -25,7 +25,7 @@ def run_solver(method, measurements, graph, x):
 
         # Try to create DistributedKAMP instance, handle DAG requirement
         try:
-            dkamp = DistributedKAMP(alpha=0.5, tau=0.1, node_max_iter=50, num_triggers=100, graph=graph, A_list=A_list, y_list=y_list)
+            dkamp = DistributedKAMP(alpha=0.5, tau=0.1, node_max_iter=50, num_triggers=100, graph=graph, A_list=A_list, y_list=y_list, just_dag=False)
         except ValueError as dag_error:
             if "DAG" in str(dag_error):
                 print(f"DAG requirement error encountered: {dag_error}")
@@ -59,7 +59,7 @@ def run_solver(method, measurements, graph, x):
                 # Retry with modified approach - use inverter for matrix operations
                 try:
                     # Re-initialize dkamp with same parameters
-                    dkamp = DistributedKAMP(alpha=0.5, tau=0.1, node_max_iter=50, num_triggers=100, graph=graph, A_list=A_list, y_list=y_list)
+                    dkamp = DistributedKAMP(alpha=0.5, tau=0.1, node_max_iter=50, num_triggers=100, graph=graph, A_list=A_list, y_list=y_list, just_dag=False)
 
                     # Manually handle the fit process with inverter fallback
                     # This is a simplified approach - in practice, you might need to modify KAMP class
