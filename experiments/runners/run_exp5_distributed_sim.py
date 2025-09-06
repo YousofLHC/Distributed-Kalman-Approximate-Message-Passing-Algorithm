@@ -10,7 +10,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 from ampire.core.kamp import KAMP
 from ampire.core.amp import AMP
 from ampire.distributed.distributed_kamp import DistributedKAMP
-from ampire.network.random_digraphs import generate_dag  # Assuming this exists
+from ampire.network.random_digraphs import create_strongly_connected_graph
 from ampire.utils.metrics import calculate_compressive_sensing_metrics
 
 def run_solver(method, measurements, graph, x):
@@ -57,7 +57,7 @@ def run_experiment():
             for cons_error in tqdm(consensus_errors, desc="Consensus Error", leave=False):
                 # Generate network
                 if topology == 'dag':
-                    graph = generate_dag(num_nodes)
+                    graph = create_strongly_connected_graph(num_nodes)
                 elif topology == 'ring':
                     # Simple ring
                     graph = {i: [(i-1)%num_nodes, (i+1)%num_nodes] for i in range(num_nodes)}
