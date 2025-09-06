@@ -107,8 +107,8 @@ def run_experiment():
     n = 500  # Signal dimension
     m = 250  # Measurements per node
     num_nodes = 10
-    topologies = ['dag', 'ring', 'self-loop']
-    message_sizes = [10, 50, 100]
+    topologies = ['ring', 'dag', 'self-loop']
+    message_sizes = [100, 10, 50]
     consensus_errors = [0.01, 0.05, 0.1]
     methods = ['DistributedKAMP']
 
