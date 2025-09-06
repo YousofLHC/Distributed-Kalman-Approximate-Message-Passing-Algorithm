@@ -192,6 +192,8 @@ def run_phase_transition_experiment(
     <output_dir>/phase_transition_results.jsonl.
     """
     Path(output_dir).mkdir(parents=True, exist_ok=True)
+    csv_path = Path(output_dir) / "phase_transition_results.csv"
+    jsonl_path = Path(output_dir) / "phase_transition_results.jsonl"
 
     def generate_problem(delta, rho):
         m = int(delta * n)
@@ -242,6 +244,24 @@ def run_phase_transition_experiment(
                     "time": time_sum / trials,
                     "sparsity": sparsity_sum / trials,
                 })
+                result = {
+                    "algo": algo,
+                    "delta": delta,
+                    "rho": rho,
+                    "nmse": nmse_sum / trials,
+                    "success": success_count / trials,
+                    "time": time_sum / trials,
+                    "sparsity": sparsity_sum / trials,
+                }
+                write_header = not csv_path.exists()
+                with csv_path.open("a", newline="") as f_csv:
+                    writer = csv.DictWriter(f_csv, fieldnames=result.keys())
+                    if write_header:
+                        writer.writeheader()
+                    writer.writerow(result)
+                with jsonl_path.open("a") as f_jsonl:
+                    f_jsonl.write(json.dumps(result) + "\n")
+
     # Save results
     csv_path = Path(output_dir) / "phase_transition_results.csv"
     jsonl_path = Path(output_dir) / "phase_transition_results.jsonl"
@@ -397,6 +417,48 @@ def run_distributed_example():
     
     print("\nTesting Distributed KAMP with Varying node_max_iter...")
     run_and_visualize(varying_max_iter, "Varying", "dag_plot_varying.png")
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+def plot_phase_heatmap(csv_file, algo, out_file):
+    results = pd.read_csv(csv_file)
+    subset = results[results["algo"] == algo]
+    deltas = sorted(subset["delta"].unique())
+    rhos   = sorted(subset["rho"].unique())
+
+    Z = np.zeros((len(rhos), len(deltas)))
+    for i, rho in enumerate(rhos):
+        for j, delta in enumerate(deltas):
+            val = subset[(subset["delta"]==delta)&(subset["rho"]==rho)]["success"].values
+            if len(val) > 0:
+                Z[i,j] = val[0]
+
+    plt.figure(figsize=(6,5))
+    cmap = plt.get_cmap("plasma")
+    im = plt.imshow(
+        Z, origin="lower", aspect="auto", cmap=cmap,
+        extent=[min(deltas), max(deltas), min(rhos), max(rhos)],
+        vmin=0, vmax=1
+    )
+    plt.colorbar(im, label="Success Probability")
+    plt.title(f"Phase Transition Success Map ({algo})", fontsize=14)
+    plt.xlabel(r"$\delta = M/N$", fontsize=12)
+    plt.ylabel(r"$\rho = K/N$", fontsize=12)
+    plt.xticks(deltas)
+    plt.yticks(rhos)
+    # annotate each cell
+    for i, rho in enumerate(rhos):
+        for j, delta in enumerate(deltas):
+            plt.text(delta, rho, f"{Z[i,j]:.2f}",
+                     ha="center", va="center",
+                     color="white" if Z[i,j] > 0.5 else "black",
+                     fontsize=8)
+    plt.tight_layout()
+    plt.savefig(out_file, dpi=200)
+    plt.close()
+
 
 if __name__ == "__main__":
     #print("Running Synthetic Example...")
