@@ -48,6 +48,7 @@ def run_experiment():
 
                     # Generate measurements
                     y = A @ x + 0.01 * np.random.randn(m)
+                    y = y.reshape(-1, 1)  # Ensure 2D for KAMP
 
                     # Run KAMP
                     kamp = KAMP(alpha=0.5, tau=0.1, max_iter=100)
