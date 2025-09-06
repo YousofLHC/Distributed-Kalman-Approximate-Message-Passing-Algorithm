@@ -122,7 +122,7 @@ def run_odds_oc(cfg, outdir):
     lam1 = cfg.get("lambda1", 1e-2)
     lam2 = cfg.get("lambda2", 0.2)
     X, y = load_odds_dataset(ds)
-    model = EnetConvexHull(l1=lam1, l2=(1-lam2))
+    model = EnetConvexHull(landa1=lam1)
     model.fit(X[y==0])       # train on normal samples only
     scores = model.score_samples(X)
     from sklearn.metrics import average_precision_score, roc_auc_score, f1_score
