@@ -40,15 +40,16 @@ def run_experiment():
                 nmse_list = []
                 for trial in tqdm(range(num_trials), desc="Trials", leave=False):
                     # Generate sparse signal
-                    x = np.zeros((n, 1))
+                    x = np.zeros(n)
                     support = np.random.choice(n, k, replace=False)
-                    x[support, 0] = np.random.randn(k)
+                    x[support] = np.random.randn(k)
 
                     # Generate measurement matrix
                     A = generate_measurement_matrix(matrix_type, n, m)
 
                     # Generate measurements
-                    y = A @ x + 0.01 * np.random.randn(m, 1)
+                    y = A @ x + 0.01 * np.random.randn(m)
+                    y = y.reshape(-1, 1)  # Ensure 2D for KAMP
 
                     # Run KAMP
                     kamp = KAMP(alpha=0.5, tau=0.1, max_iter=100)
