@@ -4,6 +4,7 @@ from scipy.linalg import orth
 import sys
 import os
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
@@ -82,7 +83,21 @@ def main():
     excel_path = 'experiments/results/exp1_matrix_stability/exp1_results.xlsx'
     df.to_excel(excel_path, index=False)
 
-    print(f"Results saved to {csv_path} and {excel_path}")
+    # Plot results
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for sparsity in sparsities:
+        for rate in measurement_rates:
+            subset = df[(df['sparsity'] == sparsity) & (df['measurement_rate'] == rate)]
+            ax.bar(subset['matrix_type'], subset['avg_nmse'], label=f'Sparsity {sparsity}, Rate {rate}')
+    ax.set_xlabel('Matrix Type')
+    ax.set_ylabel('Average NMSE')
+    ax.set_title('Matrix Stability Test')
+    ax.legend()
+    plot_path = 'experiments/results/exp1_matrix_stability/exp1_plot.png'
+    plt.savefig(plot_path)
+    plt.close()
+
+    print(f"Results saved to {csv_path} and {excel_path}, plot to {plot_path}")
 
 if __name__ == '__main__':
     main()

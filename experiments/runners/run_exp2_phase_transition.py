@@ -3,6 +3,7 @@ import pandas as pd
 import sys
 import os
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
@@ -81,7 +82,20 @@ def main():
     excel_path = 'experiments/results/exp2_phase_transition/exp2_results.xlsx'
     df.to_excel(excel_path, index=False)
 
-    print(f"Results saved to {csv_path} and {excel_path}")
+    # Plot results
+    fig, ax = plt.subplots(figsize=(10, 6))
+    for rho in rhos:
+        subset = df[df['rho'] == rho]
+        ax.plot(subset['delta'], subset['success_prob_kamp'], label=f'Rho {rho}')
+    ax.set_xlabel('Delta')
+    ax.set_ylabel('Success Probability KAMP')
+    ax.set_title('Phase Transition')
+    ax.legend()
+    plot_path = 'experiments/results/exp2_phase_transition/exp2_plot.png'
+    plt.savefig(plot_path)
+    plt.close()
+
+    print(f"Results saved to {csv_path} and {excel_path}, plot to {plot_path}")
 
 if __name__ == '__main__':
     main()

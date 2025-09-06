@@ -4,6 +4,7 @@ from skimage.metrics import peak_signal_noise_ratio
 import sys
 import os
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
@@ -70,7 +71,19 @@ def main():
     excel_path = 'experiments/results/exp3_image_cs/exp3_results.xlsx'
     df.to_excel(excel_path, index=False)
 
-    print(f"Results saved to {csv_path} and {excel_path}")
+    # Plot results
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(df['sampling_rate'], df['psnr'], label='PSNR')
+    ax.plot(df['sampling_rate'], df['ssim'], label='SSIM')
+    ax.set_xlabel('Sampling Rate')
+    ax.set_ylabel('Metric Value')
+    ax.set_title('Image CS Reconstruction')
+    ax.legend()
+    plot_path = 'experiments/results/exp3_image_cs/exp3_plot.png'
+    plt.savefig(plot_path)
+    plt.close()
+
+    print(f"Results saved to {csv_path} and {excel_path}, plot to {plot_path}")
 
 if __name__ == '__main__':
     main()
