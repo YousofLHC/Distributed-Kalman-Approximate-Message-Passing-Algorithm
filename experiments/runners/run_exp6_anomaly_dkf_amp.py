@@ -8,6 +8,7 @@ from sklearn.covariance import EllipticEnvelope
 from sklearn.metrics import roc_auc_score, precision_recall_curve
 import sys
 import os
+from tqdm import tqdm
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
@@ -30,7 +31,7 @@ def run_experiment(config):
     for ds in config['datasets']['keel']:
         datasets.append(('KEEL', ds, load_keel_dataset(ds)))
 
-    for repo, name, (X, y) in datasets:
+    for repo, name, (X, y) in tqdm(datasets, desc="Datasets"):
         print(f"Processing {repo} - {name}")
 
         # Split into train/test (assuming y has labels, use normal for train)

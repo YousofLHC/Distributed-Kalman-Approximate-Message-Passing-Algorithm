@@ -3,6 +3,7 @@ import pandas as pd
 from scipy.linalg import orth
 import sys
 import os
+from tqdm import tqdm
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
@@ -30,13 +31,13 @@ def run_experiment():
     matrix_types = ['gaussian', 'heavy-tailed', 'orthogonal']
     num_trials = 10
 
-    for sparsity in sparsities:
+    for sparsity in tqdm(sparsities, desc="Sparsity"):
         k = int(sparsity * n)
-        for rate in measurement_rates:
+        for rate in tqdm(measurement_rates, desc="Measurement Rate", leave=False):
             m = int(rate * n)
-            for matrix_type in matrix_types:
+            for matrix_type in tqdm(matrix_types, desc="Matrix Type", leave=False):
                 nmse_list = []
-                for trial in range(num_trials):
+                for trial in tqdm(range(num_trials), desc="Trials", leave=False):
                     # Generate sparse signal
                     x = np.zeros(n)
                     support = np.random.choice(n, k, replace=False)

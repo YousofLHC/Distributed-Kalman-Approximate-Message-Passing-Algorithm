@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import sys
 import os
+from tqdm import tqdm
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
@@ -19,14 +20,14 @@ def run_experiment():
     num_trials = 20
     success_threshold = 0.01  # NMSE < 0.01 for success
 
-    for delta in deltas:
+    for delta in tqdm(deltas, desc="Delta"):
         m = int(delta * n)
-        for rho in rhos:
+        for rho in tqdm(rhos, desc="Rho", leave=False):
             k = int(rho * n)
             successes_kamp = 0
             successes_exact = 0  # Assuming exact solution, e.g., if k < m, can recover exactly
 
-            for trial in range(num_trials):
+            for trial in tqdm(range(num_trials), desc="Trials", leave=False):
                 # Generate sparse signal
                 x = np.zeros(n)
                 support = np.random.choice(n, k, replace=False)

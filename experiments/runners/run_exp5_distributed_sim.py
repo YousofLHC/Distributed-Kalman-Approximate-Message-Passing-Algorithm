@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import sys
 import os
+from tqdm import tqdm
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
@@ -27,9 +28,9 @@ def run_experiment():
     support = np.random.choice(n, k, replace=False)
     x[support] = np.random.randn(k)
 
-    for topology in topologies:
-        for msg_size in message_sizes:
-            for cons_error in consensus_errors:
+    for topology in tqdm(topologies, desc="Topology"):
+        for msg_size in tqdm(message_sizes, desc="Message Size", leave=False):
+            for cons_error in tqdm(consensus_errors, desc="Consensus Error", leave=False):
                 # Generate network
                 if topology == 'dag':
                     graph = generate_dag(num_nodes)

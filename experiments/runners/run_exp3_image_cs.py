@@ -3,6 +3,7 @@ import pandas as pd
 from skimage.metrics import peak_signal_noise_ratio
 import sys
 import os
+from tqdm import tqdm
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
@@ -23,7 +24,7 @@ def run_experiment():
     # Sampling rates
     sampling_rates = [0.1, 0.2, 0.3, 0.5, 0.7]
 
-    for rate in sampling_rates:
+    for rate in tqdm(sampling_rates, desc="Sampling Rate"):
         m = int(rate * n)
 
         # Generate random measurement matrix

@@ -4,6 +4,7 @@ from sklearn.svm import OneClassSVM
 from sklearn.metrics import roc_auc_score, precision_recall_curve
 import sys
 import os
+from tqdm import tqdm
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
