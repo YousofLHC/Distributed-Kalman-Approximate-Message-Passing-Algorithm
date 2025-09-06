@@ -1,0 +1,5 @@
+task: image_cs
+dataset: set12
+m_over_n: 0.25
+lambda1: 0.001
+lambda2: 0.2

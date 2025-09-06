@@ -1,0 +1,4 @@
+task: odds_oc
+dataset: kddcup99
+lambda1: 0.01
+lambda2: 0.2
