@@ -1,0 +1,82 @@
+fusionpath   : 'data/benchmark/Information-Fusion/'
+keelpath     : 'data/benchmark/KEEL/'
+syntheticpath: 'data/synthetic/'
+
+# List of real data from ODDS Benchmark <https://odds.cs.stonybrook.edu/>
+# List[path_to_dataset, inlier_label] # n_samples
+#data__wine       : ["@str @jinja {{this.fusionpath}}wine.mat"                         , 0] # 129
+#data__lympho     : ["@str @jinja {{this.fusionpath}}lympho.mat"                       , 0] # 148
+data__iris0       : ["@str @jinja {{this.keelpath}}iris0.csv"                          , 0] # 150
+data__winequality : ["@str @jinja {{this.keelpath}}winequality-white-9_vs_4.csv"       , 0] # 168
+data__leddigit    : ["@str @jinja {{this.keelpath}}led7digit-0-2-4-5-6-7-8-9_vs_1.csv" , 0] # 443
+data__yeast       : ["@str @jinja {{this.keelpath}}yeast-1_vs_7.csv"                   , 0] # 459
+data__abalone     : ["@str @jinja {{this.keelpath}}abalone9-18.csv"                    , 0] # 731
+data__ring        : ["@str @jinja {{this.syntheticpath}}ring.csv"                     , 1] # 489
+data__twoCircle   : ["@str @jinja {{this.syntheticpath}}twoCircle.csv"                , 1] # 724
+#data__glass      : ["@str @jinja {{this.fusionpath}}glass.mat"                        , 0] # 214
+#data__vertebral  : ["@str @jinja {{this.fusionpath}}vertebral.mat"                    , 0] # 240
+#data__wbc        : ["@str @jinja {{this.fusionpath}}wbc.mat"                          , 0] # 278
+##data__ecoli      : ["@str @jinja {{this.fusionpath}}ecoli.mat"                       , 0] # 336
+#data__ionosphere : ["@str @jinja {{this.fusionpath}}ionosphere.mat"                   , 0] # 351
+#data__arrhythmia : ["@str @jinja {{this.fusionpath}}arrhythmia.mat"                   , 0] # 452
+#data__breastw    : ["@str @jinja {{this.fusionpath}}breastw.mat"                      , 0] # 683
+#data__pima       : ["@str @jinja {{this.fusionpath}}pima.mat"                         , 0] # 768
+#data__vowels     : ["@str @jinja {{this.fusionpath}}vowels.mat"                       , 0] # 1456
+#data__letter     : ["@str @jinja {{this.fusionpath}}letter.mat"                       , 0] # 1600
+#data__cardio     : ["@str @jinja {{this.fusionpath}}cardio.mat"                       , 0] # 1831
+#data__musk       : ["@str @jinja {{this.fusionpath}}musk.mat"                         , 0] # 3062
+#data__speech     : ["@str @jinja {{this.fusionpath}}speech.mat"                       , 0] # 3686
+#data__thyroid    : ["@str @jinja {{this.fusionpath}}thyroid.mat"                      , 0] # 3772
+#data__optdigits  : ["@str @jinja {{this.fusionpath}}optdigits.mat"                    , 0] # 5216
+#data__pendigits  : ["@str @jinja {{this.fusionpath}}pendigits.mat"                    , 0] # 6870
+#data__annthyroid : ["@str @jinja {{this.fusionpath}}annthyroid.mat"                   , 0] # 7200
+#data__mnist      : ["@str @jinja {{this.fusionpath}}mnist.mat"                        , 0] # 7603
+#data__shuttle    : ["@str @jinja {{this.fusionpath}}shuttle.mat"                      , 0] # 49097
+
+# sort all datasets by their n_sample
+data__all :
+#  - "@json @jinja {{this.data__wine}}"
+#  - "@json @jinja {{this.data__lympho}}"
+  - "@json @jinja {{this.data__iris0}}"
+  - "@json @jinja {{this.data__winequality}}"
+  - "@json @jinja {{this.data__leddigit}}"
+  - "@json @jinja {{this.data__yeast}}"
+  - "@json @jinja {{this.data__abalone}}"
+  - "@json @jinja {{this.data__ring}}"
+  - "@json @jinja {{this.data__twoCircle}}"
+#  - "@json @jinja {{this.data__glass}}"
+#  - "@json @jinja {{this.data__vertebral}}"
+#  - "@json @jinja {{this.data__wbc}}"
+##  - "@json @jinja {{this.data__ecoli}}"
+#  - "@json @jinja {{this.data__ionosphere}}"
+#  - "@json @jinja {{this.data__arrhythmia}}"
+#  - "@json @jinja {{this.data__breastw}}"
+#  - "@json @jinja {{this.data__pima}}"
+#  - "@json @jinja {{this.data__vowels}}"
+#  - "@json @jinja {{this.data__letter}}"
+#  - "@json @jinja {{this.data__cardio}}"
+#  - "@json @jinja {{this.data__musk}}"
+#  - "@json @jinja {{this.data__speech}}"
+#  - "@json @jinja {{this.data__thyroid}}"
+#  - "@json @jinja {{this.data__optdigits}}"
+#  - "@json @jinja {{this.data__pendigits}}"
+#  - "@json @jinja {{this.data__annthyroid}}"
+#  - "@json @jinja {{this.data__mnist}}"
+#  - "@json @jinja {{this.data__shuttle}}"
+
+sampling__factor__inlier__ionosphere  : 1     #  351/351
+sampling__factor__inlier__cardio      : 0.7   #  1282/1831
+sampling__factor__inlier__thyroid     : 0.3   #  1132/3772
+sampling__factor__inlier__optdigits   : 0.2   #  1043/5216
+sampling__factor__inlier__pendigits   : 0.15  #  1030/6870 
+sampling__factor__inlier__annthyroid  : 0.2   #! 1440/7200 
+sampling__factor__inlier__mnist       : 0.15  #! 1141/7603 
+sampling__factor__inlier__shuttle     : 0.022 #! 1080/49097 
+
+sampling__factor__outlier__annthyroid : 0.4   #! 214/534
+sampling__factor__outlier__mnist      : 0.42  #! 294/700
+sampling__factor__outlier__shuttle    : 0.099 #! 348/3511
+
+
+
+
