@@ -61,7 +61,7 @@ class DistributedKAMP(KAMP):
             Node(estimator=KAMP(alpha=alpha, tau=tau, max_iter=max_iter), name=str(i))
             for i, max_iter in enumerate(self.node_max_iter)
         ]
-        self.my_graph = MyGraph()
+        self.my_graph = MyGraph(verbose=False)
         self._initialize_graph()
 
     def _initialize_graph(self):

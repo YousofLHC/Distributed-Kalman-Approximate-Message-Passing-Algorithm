@@ -37,6 +37,10 @@ class Node:
         return self._id
 
 class MyGraph(nx.DiGraph):
+    def __init__(self, verbose: bool = False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.verbose = verbose
+
     def trigger(self, node, inplace=True, **attr):
         self.total_in_degree(node, inplace, **attr)
         node.solve()
@@ -45,31 +49,36 @@ class MyGraph(nx.DiGraph):
     def total_in_degree(self, node, inplace=True, **attr):
         if node not in self.nodes:
             raise nx.NetworkXError(f"Node {node} is not in the graph.")
-        
-        print('#'*30, f"total_in_degree({node}), {node}.x={node.x}, P_{node}={np.ravel(node.P)}", "#"*30)
+
+        if self.verbose:
+            print('#'*30, f"total_in_degree({node}), {node}.x={node.x}, P_{node}={np.ravel(node.P)}", "#"*30)
         total_x = 0
         total_P = 0
         if self.in_degree(node) == 0:
             self.nodes[node]['x'] = self.nodes[node].get('x', node.x)
             self.nodes[node]['P'] = self.nodes[node].get('P', node.P)
             return self.nodes[node]['x']
-        
-        print(' '*10, 'normalize in_weights', ' '*10)
+
+        if self.verbose:
+            print(' '*10, 'normalize in_weights', ' '*10)
         self >> node  # Normalize in-degree weights
         for u, v, data in self.in_edges(node, data=True):
-            print('j-->i', f"{u}-->{v}")
-            print(' '*25, self.nodes(data=True), ' '*25)
             w = data.get('weight', 0)
-            print(f"w={w}, x_{u}={data.get('x', 0)}")
-            print(f"P_{u}\n{data.get('P', u.P)}")
+            if self.verbose:
+                print('j-->i', f"{u}-->{v}")
+                print(' '*25, self.nodes(data=True), ' '*25)
+                print(f"w={w}, x_{u}={data.get('x', 0)}")
+                print(f"P_{u}\n{data.get('P', u.P)}")
             total_x += w * data.get('x', 0)
             total_P += w * data.get('P', u.P)
         if inplace:
-            print(f"{node}.total_x={total_x},\n total_P=\n{total_P}")
-            print('#'*25,'\n')
+            if self.verbose:
+                print(f"{node}.total_x={total_x},\n total_P=\n{total_P}")
+                print('#'*25,'\n')
             self.nodes[node]['x'] = total_x
             self.nodes[node]['P'] = total_P
-            print(f"{node}.total_x={self.nodes[node]['x']},\n {node}.total_P=\n{self.nodes[node]['P']}")
+            if self.verbose:
+                print(f"{node}.total_x={self.nodes[node]['x']},\n {node}.total_P=\n{self.nodes[node]['P']}")
         return self
 
     def __lshift__(self, node):

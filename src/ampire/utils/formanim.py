@@ -45,9 +45,10 @@ class Node:
 class MyGraph(nx.DiGraph):
     """Directed acyclic graph for distributed computation with visualization support."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, verbose: bool = False, *args, **kwargs):
         """Initialize graph with triggered nodes tracking."""
         super().__init__(*args, **kwargs)
+        self.verbose = verbose
         self.triggered_nodes = set()  # Set to track triggered nodes
 
     def compute_sparsity(self, node: Node) -> int:
@@ -111,13 +112,23 @@ class MyGraph(nx.DiGraph):
 
         self >> node  # Normalize incoming weights
         for u, v, data in self.in_edges(node, data=True):
-            w = data.get('weight', 0)
+            if self.verbose:
+                print('j-->i', f"{u}-->{v}")
+                print(' '*25, self.nodes(data=True), ' '*25)
+                w = data.get('weight', 0)
+                print(f"w={w}, x_{u}={data.get('x', 0)}")
+                print(f"P_{u}\n{data.get('P', u.P)}")
             total_x += w * data.get('x', 0)
             total_P += w * data.get('P', u.P)
 
         if inplace:
+            if self.verbose:
+                print(f"{node}.total_x={total_x},\n total_P=\n{total_P}")
+                print('#'*25,'\n')
             self.nodes[node]['x'] = total_x
             self.nodes[node]['P'] = total_P
+            if self.verbose:
+                print(f"{node}.total_x={self.nodes[node]['x']},\n {node}.total_P=\n{self.nodes[node]['P']}")
         return self
 
     def trigger(self, node: Node, inplace: bool = True, **attr) -> 'MyGraph':
@@ -191,7 +202,7 @@ class DistributedKAMP(KAMP):
             Node(estimator=KAMP(alpha=alpha, tau=tau, max_iter=max_iter), name=str(i))
             for i, max_iter in enumerate(self.node_max_iter)
         ]
-        self.my_graph = MyGraph()
+        self.my_graph = MyGraph(verbose=False)
         self._initialize_graph()
 
     def _initialize_graph(self):
