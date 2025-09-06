@@ -67,18 +67,19 @@ def run_experiment():
                     'avg_nmse': avg_nmse
                 })
 
-    return results
+                # Save results incrementally
+                df = pd.DataFrame(results)
+                csv_path = 'experiments/results/exp1_matrix_stability/exp1_results.csv'
+                os.makedirs(os.path.dirname(csv_path), exist_ok=True)
+                df.to_csv(csv_path, index=False)
+
+    return results, sparsities, measurement_rates
 
 def main():
-    results = run_experiment()
+    results, sparsities, measurement_rates = run_experiment()
 
-    # Save to CSV
+    # Save to Excel (final save)
     df = pd.DataFrame(results)
-    csv_path = 'experiments/results/exp1_matrix_stability/exp1_results.csv'
-    os.makedirs(os.path.dirname(csv_path), exist_ok=True)
-    df.to_csv(csv_path, index=False)
-
-    # Save to Excel
     excel_path = 'experiments/results/exp1_matrix_stability/exp1_results.xlsx'
     df.to_excel(excel_path, index=False)
 
@@ -96,6 +97,7 @@ def main():
     plt.savefig(plot_path)
     plt.close()
 
+    csv_path = 'experiments/results/exp1_matrix_stability/exp1_results.csv'
     print(f"Results saved to {csv_path} and {excel_path}, plot to {plot_path}")
 
 if __name__ == '__main__':
