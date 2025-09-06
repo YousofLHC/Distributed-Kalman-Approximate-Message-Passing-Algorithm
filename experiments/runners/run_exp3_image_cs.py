@@ -10,7 +10,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from ampire.core.kamp import KAMP
 from ampire.utils.metrics import calculate_ssim
-from experiments.datasets.image_loaders import load_lena  # Assuming this function exists
+from ..datasets.image_loaders import load_lena  # Assuming this function exists
 
 def run_experiment():
     results = []

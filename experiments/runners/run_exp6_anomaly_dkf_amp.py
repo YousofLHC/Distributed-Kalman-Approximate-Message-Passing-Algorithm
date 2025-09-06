@@ -15,7 +15,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from ampire.utils.metrics import calculate_anomaly_detection_metrics
 from ampire.distributed.distributed_kamp import DKFAMP  # Assuming DKF-AMP class
-from experiments.datasets.benchmark_loaders import load_odds_dataset, load_keel_dataset  # Assuming these functions exist
+from ..datasets.benchmark_loaders import load_odds_dataset, load_keel_dataset  # Assuming these functions exist
 
 def load_config(config_path):
     with open(config_path, 'r') as file:
