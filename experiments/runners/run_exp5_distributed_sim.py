@@ -90,7 +90,7 @@ def run_experiment():
     topologies = ['dag', 'ring', 'self-loop']
     message_sizes = [10, 50, 100]
     consensus_errors = [0.01, 0.05, 0.1]
-    methods = ['DistributedKAMP', 'AMP', 'KAMP']
+    methods = ['DistributedKAMP']
 
     # Generate sparse signal
     k = 50
