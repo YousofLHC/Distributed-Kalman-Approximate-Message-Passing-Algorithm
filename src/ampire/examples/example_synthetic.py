@@ -4,6 +4,12 @@ from ampire.core.kamp import KAMP
 from ampire.distributed.distributed_kamp import DistributedKAMP
 from ampire.utils.visualization import plot_signal_comparison
 from ampire.utils.metrics import calculate_metrics, log_results
+import csv
+import json
+import time
+from pathlib import Path
+from tqdm import tqdm
+
 
 def get_sinusoidal_data(m=400, n=50, sigma2=0.01, random_state=42):
     """Generate sinusoidal data for testing."""
@@ -144,6 +150,110 @@ def run_varying_sparsity_example():
         plot_signal_comparison(x_true, x_est, f"KAMP Sparsity {sparsity} Recovery")
         nmse = np.linalg.norm(x_est - x_true) ** 2 / np.linalg.norm(x_true) ** 2
         print(f"NMSE (sparsity={sparsity}): {nmse:.4f}")
+
+def run_phase_transition_experiment(
+    n: int = 500,
+    lam1: float = 0.01,
+    delta_list=(0.2, 0.4, 0.6, 0.8),
+    rho_list=(0.05, 0.1, 0.2),
+    trials: int = 3,
+    max_iter: int = 50,
+    snr_db: float = 40.0,
+    success_threshold: float = 1e-2,
+    output_dir: str = "results/synthetic_phase"
+):
+    """
+    Run a synthetic phase transition experiment using KAMP and a baseline AMP.
+
+    Parameters
+    ----------
+    n : int, default 500
+        Dimension of the unknown signal.
+    lam1 : float, default 0.01
+        L1 regularisation weight (tau in KAMP).
+    delta_list : iterable of float
+        Sampling ratios m/n to evaluate.
+    rho_list : iterable of float
+        Sparsity ratios k/n to evaluate.
+    trials : int, default 3
+        Number of Monte‑Carlo trials per (delta, rho) point.
+    max_iter : int, default 50
+        Maximum number of KAMP iterations.
+    snr_db : float, default 40.0
+        Signal‑to‑noise ratio in decibels.
+    success_threshold : float, default 1e-2
+        NMSE threshold below which a recovery is considered successful.
+    output_dir : str, default "results/synthetic_phase"
+        Directory where CSV and JSONL results will be saved.
+
+    Notes
+    -----
+    Results are saved as <output_dir>/phase_transition_results.csv and
+    <output_dir>/phase_transition_results.jsonl.
+    """
+    Path(output_dir).mkdir(parents=True, exist_ok=True)
+
+    def generate_problem(delta, rho):
+        m = int(delta * n)
+        A = np.random.randn(m, n) / np.sqrt(m)
+        k = max(1, int(rho * n))
+        x_true = np.zeros((n, 1))
+        idx = np.random.choice(n, size=k, replace=False)
+        x_true[idx] = np.random.randn(k, 1)
+        y0 = A @ x_true
+        sigma = np.linalg.norm(y0) / np.sqrt(m) * 10 ** (-snr_db / 20)
+        y = y0 + sigma * np.random.randn(m, 1)
+        return A, x_true, y
+
+    results = []
+    algorithms = ("KF-AMP", "AMP")
+    for algo in algorithms:
+        for delta in tqdm(delta_list, desc=f"Delta ({algo})"):
+            for rho in tqdm(rho_list, desc="  Rho", leave=False):
+                nmse_sum = 0.0
+                success_count = 0
+                time_sum = 0.0
+                sparsity_sum = 0.0
+                for _ in range(trials):
+                    A, x_true, y = generate_problem(delta, rho)
+                    start = time.time()
+                    kamp = KAMP(alpha=0.5, tau=lam1, max_iter=max_iter)
+                    kamp.fit(A, y)
+                    if algo == "AMP":
+                        kamp.Q = np.zeros((kamp.n, kamp.n))  # emulate classic AMP
+                    x_est = kamp.solve()
+                    elapsed = time.time() - start
+                    # Compute NMSE
+                    nmse_val = float(np.mean((x_true.flatten() - x_est.flatten()) ** 2) /
+                                     np.mean(x_true.flatten() ** 2))
+                    nmse_sum += nmse_val
+                    if nmse_val < success_threshold:
+                        success_count += 1
+                    time_sum += elapsed
+                    # Compute sparsity
+                    sparsity_val = float(np.count_nonzero(np.abs(x_est) > 1e-3) / x_est.size)
+                    sparsity_sum += sparsity_val
+                results.append({
+                    "algo": algo,
+                    "delta": delta,
+                    "rho": rho,
+                    "nmse": nmse_sum / trials,
+                    "success": success_count / trials,
+                    "time": time_sum / trials,
+                    "sparsity": sparsity_sum / trials,
+                })
+    # Save results
+    csv_path = Path(output_dir) / "phase_transition_results.csv"
+    jsonl_path = Path(output_dir) / "phase_transition_results.jsonl"
+    with csv_path.open("w", newline="") as f_csv:
+        writer = csv.DictWriter(f_csv, fieldnames=results[0].keys())
+        writer.writeheader()
+        writer.writerows(results)
+    with jsonl_path.open("w") as f_jsonl:
+        for row in results:
+            f_jsonl.write(json.dumps(row) + "\n")
+    print(f"Saved results to {csv_path} and {jsonl_path}")
+
 
 def run_image_example():
     """Simulate sparse signal recovery for a small image patch."""
@@ -289,17 +399,19 @@ def run_distributed_example():
     run_and_visualize(varying_max_iter, "Varying", "dag_plot_varying.png")
 
 if __name__ == "__main__":
-    print("Running Synthetic Example...")
-    run_synthetic_example()
-    print("\nRunning High Dimensionality Example...")
-    run_high_dimensionality_example()
-    print("\nRunning High Noise Example...")
-    run_high_noise_example()
-    print("\nRunning Varying Sparsity Example...")
-    run_varying_sparsity_example()
-    print("\nRunning Image Example...")
-    run_image_example()
-    print("\nRunning Audio Example...")
-    run_audio_example()
-    print("\nRunning Distributed Example...")
-    run_distributed_example()
+    #print("Running Synthetic Example...")
+    #run_synthetic_example()
+    #print("\nRunning High Dimensionality Example...")
+    #run_high_dimensionality_example()
+    #print("\nRunning High Noise Example...")
+    #run_high_noise_example()
+    #print("\nRunning Varying Sparsity Example...")
+    #run_varying_sparsity_example()
+    #print("\nRunning Image Example...")
+    #run_image_example()
+    #print("\nRunning Audio Example...")
+    #run_audio_example()
+    #print("\nRunning Distributed Example...")
+    #run_distributed_example()
+    print("\nRun phase transition experiment with default parameters...")
+    run_phase_transition_experiment()
