@@ -24,6 +24,8 @@ def run_experiment():
 
     # Methods
     methods = ['KAMP']  # Prioritize KAMP
+    # Other methods (deactivated for now):
+    # methods = ['KAMP', 'OCSVM']
 
     for method in methods:
         if method == 'KAMP':

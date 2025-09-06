@@ -40,6 +40,8 @@ def run_experiment(config):
         y_test = y
 
         for method_config in [config['methods']['proposed']]:  # Prioritize DKF-AMP
+            # Other baselines (deactivated for now):
+            # for method_config in [config['methods']['proposed']] + config['methods']['baselines']:
             method_name = method_config['name']
             print(f"  Running {method_name}")
 
