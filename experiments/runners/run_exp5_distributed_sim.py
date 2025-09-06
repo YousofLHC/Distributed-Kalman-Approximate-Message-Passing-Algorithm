@@ -125,6 +125,8 @@ def run_experiment():
                 # Plot and save topology
                 out_dir = 'experiments/results/exp5_distributed_sim'
                 os.makedirs(out_dir, exist_ok=True)
+                jsonl_path = os.path.join(out_dir, 'exp5_results.jsonl')
+                csv_path = os.path.join(out_dir, 'exp5_results.csv')
 
                 # Save adjacency matrix
                 adj_matrix = nx.to_numpy_array(graph)
@@ -165,6 +167,9 @@ def run_experiment():
                     # Compute all compressive sensing metrics
                     metrics = calculate_compressive_sensing_metrics(x, x_hat)
 
+                    # Create trial ID for tracking
+                    trial_id = f"{method}_n{n}_m{m}_k{k}_topology_{topology}_msg{msg_size}_cons{cons_error}"
+
                     results.append({
                         'topology': topology,
                         'message_size': msg_size,
@@ -172,6 +177,25 @@ def run_experiment():
                         'method': method,
                         **metrics  # Include all metrics from the function
                     })
+
+                    # Save single trial result incrementally to JSONL
+                    jsonl_row = {
+                        "trial_id": trial_id,
+                        "method": method,
+                        "topology": topology,
+                        "message_size": msg_size,
+                        "consensus_error": cons_error,
+                        "mse": metrics['mse'],
+                        "rmse": metrics['rmse'],
+                        "nmse": metrics['nmse'],
+                        "snr": metrics['snr'],
+                        "peak_snr": metrics['peak_snr']
+                    }
+                    with open(jsonl_path, 'a') as f:
+                        f.write(json.dumps(jsonl_row) + '\n')
+
+                    # Save cumulative CSV incrementally
+                    pd.DataFrame(results).to_csv(csv_path, index=False)
 
     return results
 
