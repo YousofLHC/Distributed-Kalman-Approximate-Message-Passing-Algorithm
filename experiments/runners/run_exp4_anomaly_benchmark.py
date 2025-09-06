@@ -29,12 +29,23 @@ def run_solver(method, X_train, X_test):
         X_recon = amp.solve().T
         scores = np.sum((X_test - X_recon) ** 2, axis=1)
     elif method == 'DistributedKAMP':
-        # Single-node
-        G = nx.DiGraph()
-        G.add_node(0)
-        A_list = [np.eye(X_train.shape[1])]
-        y_list = [X_train.T]
-        dkamp = DistributedKAMP(alpha=0.5, tau=0.1, node_max_iter=100, num_triggers=1, graph=G, A_list=A_list, y_list=y_list)
+        # Use sophisticated DAG topology (best from exp5)
+        num_nodes = 5  # Use 5 nodes for comparison
+        G = DistributedKAMP.create_dag(num_nodes, edge_prob=0.4, random_state=42)
+
+        # For anomaly detection, split training data across nodes
+        A_list = []
+        y_list = []
+        samples_per_node = X_train.shape[0] // num_nodes
+
+        for i in range(num_nodes):
+            start_idx = i * samples_per_node
+            end_idx = (i + 1) * samples_per_node if i < num_nodes - 1 else X_train.shape[0]
+            X_node = X_train[start_idx:end_idx]
+            A_list.append(np.eye(X_node.shape[1]))  # Identity matrix for reconstruction
+            y_list.append(X_node.T)
+
+        dkamp = DistributedKAMP(alpha=0.5, tau=0.1, node_max_iter=100, num_triggers=10, graph=G, A_list=A_list, y_list=y_list)
         dkamp.fit()
 
         # Plot and save topology
@@ -43,16 +54,17 @@ def run_solver(method, X_train, X_test):
 
         # Save adjacency matrix
         adj_matrix = nx.to_numpy_array(G)
-        adj_path = os.path.join(out_dir, 'topology_single_node_adjacency.npy')
+        adj_path = os.path.join(out_dir, 'topology_dag_adjacency.npy')
         np.save(adj_path, adj_matrix)
 
         # Plot topology
-        plt.figure(figsize=(6, 6))
+        plt.figure(figsize=(10, 8))
         pos = nx.spring_layout(G, seed=42)
         nx.draw(G, pos, with_labels=True, node_color='lightblue',
-               node_size=500, font_size=16, font_weight='bold')
-        plt.title('Distributed KAMP Topology: Single Node')
-        plot_path = os.path.join(out_dir, 'topology_single_node_graph.png')
+               node_size=500, font_size=16, font_weight='bold',
+               arrows=True, arrowstyle='->', arrowsize=20)
+        plt.title('Distributed KAMP Topology: DAG (5 nodes)')
+        plot_path = os.path.join(out_dir, 'topology_dag_graph.png')
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         plt.close()
 
