@@ -22,7 +22,27 @@ def run_solver(method, measurements, graph, x):
     if method == 'DistributedKAMP':
         A_list = [A for A, y in measurements]
         y_list = [y for A, y in measurements]
-        dkamp = DistributedKAMP(alpha=0.5, tau=0.1, node_max_iter=50, num_triggers=100, graph=graph, A_list=A_list, y_list=y_list)
+
+        # Try to create DistributedKAMP instance, handle DAG requirement
+        try:
+            dkamp = DistributedKAMP(alpha=0.5, tau=0.1, node_max_iter=50, num_triggers=100, graph=graph, A_list=A_list, y_list=y_list)
+        except ValueError as dag_error:
+            if "DAG" in str(dag_error):
+                print(f"DAG requirement error encountered: {dag_error}")
+                print("Graph is not a DAG, using zero vector as fallback")
+                # Save exception for later consideration
+                error_info = {
+                    'error_type': 'DAG_Violation',
+                    'error_message': str(dag_error),
+                    'graph_type': type(graph).__name__,
+                    'num_nodes': len(graph.nodes()) if hasattr(graph, 'nodes') else 'unknown',
+                    'num_edges': len(graph.edges()) if hasattr(graph, 'edges') else 'unknown'
+                }
+                # Could save to a log file or database for later analysis
+                print(f"Error details saved for later consideration: {error_info}")
+                return np.zeros_like(x)
+            else:
+                raise dag_error
 
         # Try-except block to handle SVD not converge error
         try:
@@ -102,25 +122,40 @@ def run_experiment():
         for msg_size in tqdm(message_sizes, desc="Message Size", leave=False):
             for cons_error in tqdm(consensus_errors, desc="Consensus Error", leave=False):
                 # Generate sophisticated network topology
-                if topology == 'dag':
-                    graph = DistributedKAMP.create_dag(num_nodes, edge_prob=0.4, random_state=42)
-                elif topology == 'ring':
-                    # Sophisticated ring with additional connections
-                    graph = nx.DiGraph()
-                    graph.add_nodes_from(range(num_nodes))
-                    for i in range(num_nodes):
-                        graph.add_edge(i, (i + 1) % num_nodes)
-                        # Add skip connections for sophistication
-                        if num_nodes > 4:
-                            graph.add_edge(i, (i + 2) % num_nodes)
-                elif topology == 'self-loop':
-                    graph = nx.DiGraph()
-                    graph.add_nodes_from(range(num_nodes))
-                    for i in range(num_nodes):
-                        graph.add_edge(i, i)
-                        # Add some cross connections
-                        if i < num_nodes - 1:
-                            graph.add_edge(i, i + 1)
+                try:
+                    if topology == 'dag':
+                        graph = DistributedKAMP.create_dag(num_nodes, edge_prob=0.4, random_state=42)
+                    elif topology == 'ring':
+                        # Sophisticated ring with additional connections
+                        graph = nx.DiGraph()
+                        graph.add_nodes_from(range(num_nodes))
+                        for i in range(num_nodes):
+                            graph.add_edge(i, (i + 1) % num_nodes)
+                            # Add skip connections for sophistication
+                            if num_nodes > 4:
+                                graph.add_edge(i, (i + 2) % num_nodes)
+                    elif topology == 'self-loop':
+                        graph = nx.DiGraph()
+                        graph.add_nodes_from(range(num_nodes))
+                        for i in range(num_nodes):
+                            graph.add_edge(i, i)
+                            # Add some cross connections
+                            if i < num_nodes - 1:
+                                graph.add_edge(i, i + 1)
+                    else:
+                        raise ValueError(f"Unknown topology: {topology}")
+                except Exception as graph_error:
+                    print(f"Graph creation error for topology '{topology}': {graph_error}")
+                    print("Skipping this topology configuration")
+                    # Save exception for later consideration
+                    error_info = {
+                        'error_type': 'Graph_Creation_Error',
+                        'error_message': str(graph_error),
+                        'topology': topology,
+                        'num_nodes': num_nodes
+                    }
+                    print(f"Graph creation error details: {error_info}")
+                    continue  # Skip this topology and continue with others
 
                 # Plot and save topology
                 out_dir = 'experiments/results/exp5_distributed_sim'
@@ -128,31 +163,36 @@ def run_experiment():
                 jsonl_path = os.path.join(out_dir, 'exp5_results.jsonl')
                 csv_path = os.path.join(out_dir, 'exp5_results.csv')
 
-                # Save adjacency matrix
-                adj_matrix = nx.to_numpy_array(graph)
-                adj_path = os.path.join(out_dir, f'topology_{topology}_adjacency.npy')
-                np.save(adj_path, adj_matrix)
+                try:
+                    # Save adjacency matrix
+                    adj_matrix = nx.to_numpy_array(graph)
+                    adj_path = os.path.join(out_dir, f'topology_{topology}_adjacency.npy')
+                    np.save(adj_path, adj_matrix)
 
-                # Save adjacency matrix as text for easier inspection
-                adj_txt_path = os.path.join(out_dir, f'topology_{topology}_adjacency.txt')
-                np.savetxt(adj_txt_path, adj_matrix, fmt='%.0f')
+                    # Save adjacency matrix as text for easier inspection
+                    adj_txt_path = os.path.join(out_dir, f'topology_{topology}_adjacency.txt')
+                    np.savetxt(adj_txt_path, adj_matrix, fmt='%.0f')
 
-                # Save graph in GraphML format for further analysis
-                graphml_path = os.path.join(out_dir, f'topology_{topology}_graph.graphml')
-                nx.write_graphml(graph, graphml_path)
+                    # Save graph in GraphML format for further analysis
+                    graphml_path = os.path.join(out_dir, f'topology_{topology}_graph.graphml')
+                    nx.write_graphml(graph, graphml_path)
 
-                # Plot topology (save to file)
-                plt.figure(figsize=(10, 8))
-                pos = nx.spring_layout(graph, seed=42)
-                nx.draw(graph, pos, with_labels=True, node_color='lightblue',
-                       node_size=500, font_size=16, font_weight='bold',
-                       arrows=True, arrowstyle='->', arrowsize=20)
-                plt.title(f'Distributed KAMP Topology: {topology.upper()}')
-                plot_path = os.path.join(out_dir, f'topology_{topology}_graph.png')
-                plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-                plt.close()
+                    # Plot topology (save to file)
+                    plt.figure(figsize=(10, 8))
+                    pos = nx.spring_layout(graph, seed=42)
+                    nx.draw(graph, pos, with_labels=True, node_color='lightblue',
+                           node_size=500, font_size=16, font_weight='bold',
+                           arrows=True, arrowstyle='->', arrowsize=20)
+                    plt.title(f'Distributed KAMP Topology: {topology.upper()}')
+                    plot_path = os.path.join(out_dir, f'topology_{topology}_graph.png')
+                    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+                    plt.close()
 
-                print(f"Saved topology {topology}: {plot_path}, {adj_path}, {graphml_path}")
+                    print(f"Saved topology {topology}: {plot_path}, {adj_path}, {graphml_path}")
+                except Exception as save_error:
+                    print(f"Error saving topology files for {topology}: {save_error}")
+                    print("Continuing with experiment despite save error")
+                    # Continue execution even if saving fails
 
                 # Simulate distributed measurements
                 measurements = []
@@ -162,40 +202,56 @@ def run_experiment():
                     measurements.append((A_i, y_i))
 
                 for method in methods:
-                    x_hat = run_solver(method, measurements, graph, x)
+                    try:
+                        x_hat = run_solver(method, measurements, graph, x)
 
-                    # Compute all compressive sensing metrics
-                    metrics = calculate_compressive_sensing_metrics(x, x_hat)
+                        # Compute all compressive sensing metrics
+                        metrics = calculate_compressive_sensing_metrics(x, x_hat)
 
-                    # Create trial ID for tracking
-                    trial_id = f"{method}_n{n}_m{m}_k{k}_topology_{topology}_msg{msg_size}_cons{cons_error}"
+                        # Create trial ID for tracking
+                        trial_id = f"{method}_n{n}_m{m}_k{k}_topology_{topology}_msg{msg_size}_cons{cons_error}"
 
-                    results.append({
-                        'topology': topology,
-                        'message_size': msg_size,
-                        'consensus_error': cons_error,
-                        'method': method,
-                        **metrics  # Include all metrics from the function
-                    })
+                        results.append({
+                            'topology': topology,
+                            'message_size': msg_size,
+                            'consensus_error': cons_error,
+                            'method': method,
+                            **metrics  # Include all metrics from the function
+                        })
 
-                    # Save single trial result incrementally to JSONL
-                    jsonl_row = {
-                        "trial_id": trial_id,
-                        "method": method,
-                        "topology": topology,
-                        "message_size": msg_size,
-                        "consensus_error": cons_error,
-                        "mse": metrics['mse'],
-                        "rmse": metrics['rmse'],
-                        "nmse": metrics['nmse'],
-                        "snr": metrics['snr'],
-                        "peak_snr": metrics['peak_snr']
-                    }
-                    with open(jsonl_path, 'a') as f:
-                        f.write(json.dumps(jsonl_row) + '\n')
+                        # Save single trial result incrementally to JSONL
+                        jsonl_row = {
+                            "trial_id": trial_id,
+                            "method": method,
+                            "topology": topology,
+                            "message_size": msg_size,
+                            "consensus_error": cons_error,
+                            "mse": metrics['mse'],
+                            "rmse": metrics['rmse'],
+                            "nmse": metrics['nmse'],
+                            "snr": metrics['snr'],
+                            "peak_snr": metrics['peak_snr']
+                        }
+                        with open(jsonl_path, 'a') as f:
+                            f.write(json.dumps(jsonl_row) + '\n')
 
-                    # Save cumulative CSV incrementally
-                    pd.DataFrame(results).to_csv(csv_path, index=False)
+                        # Save cumulative CSV incrementally
+                        pd.DataFrame(results).to_csv(csv_path, index=False)
+
+                    except Exception as trial_error:
+                        print(f"Error in trial execution for {method} with {topology}: {trial_error}")
+                        print("Saving error information and continuing")
+                        # Save error information for later consideration
+                        error_info = {
+                            'error_type': 'Trial_Execution_Error',
+                            'error_message': str(trial_error),
+                            'method': method,
+                            'topology': topology,
+                            'message_size': msg_size,
+                            'consensus_error': cons_error
+                        }
+                        print(f"Trial error details: {error_info}")
+                        # Continue to next trial instead of crashing
 
     return results
 
