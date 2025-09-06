@@ -121,8 +121,9 @@ def run_odds_oc(cfg, outdir):
     ds = cfg["dataset"]      # 'kddcup99' | 'arrhythmia' | 'secom' ...
     lam1 = cfg.get("lambda1", 1e-2)
     lam2 = cfg.get("lambda2", 0.2)
+    metric = cfg.get("metric", "rbf")
     X, y = load_odds_dataset(ds)
-    model = EnetConvexHull(landa1=lam1)
+    model = EnetConvexHull(landa1=lam1, metric=metric)
     model.fit(X[y==0])       # train on normal samples only
     scores = model.score_samples(X)
     from sklearn.metrics import average_precision_score, roc_auc_score, f1_score
@@ -218,12 +219,12 @@ def main():
     else:
         print("Running configs sequentially...")
         for conf in tqdm(selected_configs, desc="Configs"):
-            print(f"Running {conf.name}...")
+            tqdm.write(f"Running {conf.name}...")
             try:
                 run_experiment(conf, args.out)
-                print(f"Completed {conf.name}.")
+                tqdm.write(f"Completed {conf.name}.")
             except Exception as e:
-                print(f"Error in {conf.name}: {e}")
+                tqdm.write(f"Error in {conf.name}: {e}")
         print("All sequential executions completed.")
 
 if __name__ == "__main__":
