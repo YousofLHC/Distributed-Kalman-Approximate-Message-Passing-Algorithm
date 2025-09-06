@@ -96,6 +96,180 @@ def calculate_compressive_sensing_metrics(y_true: np.ndarray, y_pred: np.ndarray
     return {'nmse': nmse, 'peak_snr': peak_snr}
 
 
+def calculate_gmsd(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """
+    Calculate Gradient Magnitude Similarity Deviation (GMSD).
+
+    Parameters
+    ----------
+    y_true : np.ndarray
+        True image.
+    y_pred : np.ndarray
+        Predicted image.
+
+    Returns
+    -------
+    float
+        GMSD value.
+    """
+    from scipy.ndimage import sobel
+
+    # Compute gradients
+    grad_true_x = sobel(y_true, axis=0)
+    grad_true_y = sobel(y_true, axis=1)
+    grad_pred_x = sobel(y_pred, axis=0)
+    grad_pred_y = sobel(y_pred, axis=1)
+
+    grad_true = np.sqrt(grad_true_x**2 + grad_true_y**2)
+    grad_pred = np.sqrt(grad_pred_x**2 + grad_pred_y**2)
+
+    # Compute quality map
+    quality_map = (2 * grad_true * grad_pred + 0.01) / (grad_true**2 + grad_pred**2 + 0.01)
+
+    # GMSD
+    gmsd = np.std(quality_map)
+
+    return gmsd
+
+
+def calculate_fsim(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """
+    Calculate Feature Similarity Index (FSIM).
+
+    Parameters
+    ----------
+    y_true : np.ndarray
+        True image.
+    y_pred : np.ndarray
+        Predicted image.
+
+    Returns
+    -------
+    float
+        FSIM value.
+    """
+    # Simplified FSIM implementation
+    from scipy.ndimage import sobel, gaussian_filter
+
+    # Compute phase congruency (simplified)
+    pc_true = np.abs(sobel(y_true, axis=0)) + np.abs(sobel(y_true, axis=1))
+    pc_pred = np.abs(sobel(y_pred, axis=0)) + np.abs(sobel(y_pred, axis=1))
+
+    # Compute similarity
+    pc_sim = (2 * pc_true * pc_pred + 0.01) / (pc_true**2 + pc_pred**2 + 0.01)
+
+    # Gradient magnitude
+    gm_true = np.sqrt(sobel(y_true, axis=0)**2 + sobel(y_true, axis=1)**2)
+    gm_pred = np.sqrt(sobel(y_pred, axis=0)**2 + sobel(y_pred, axis=1)**2)
+    gm_sim = (2 * gm_true * gm_pred + 0.01) / (gm_true**2 + gm_pred**2 + 0.01)
+
+    # Combine
+    sim = pc_sim * gm_sim
+    fsim = np.mean(sim)
+
+    return fsim
+
+
+def calculate_vif(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    """
+    Calculate Visual Information Fidelity (VIF).
+
+    Parameters
+    ----------
+    y_true : np.ndarray
+        True image.
+    y_pred : np.ndarray
+        Predicted image.
+
+    Returns
+    -------
+    float
+        VIF value.
+    """
+    # Simplified VIF implementation
+    from scipy.ndimage import gaussian_filter
+
+    # Compute mutual information (simplified)
+    sigma = 1.0
+    mu_true = gaussian_filter(y_true, sigma)
+    mu_pred = gaussian_filter(y_pred, sigma)
+
+    sigma_true = np.sqrt(gaussian_filter(y_true**2, sigma) - mu_true**2)
+    sigma_pred = np.sqrt(gaussian_filter(y_pred**2, sigma) - mu_pred**2)
+    sigma_tp = gaussian_filter(y_true * y_pred, sigma) - mu_true * mu_pred
+
+    vif = np.mean((sigma_tp**2 + 0.01) / (sigma_true**2 * sigma_pred**2 + 0.01))
+
+    return vif
+
+
+def calculate_phase_transition(successes: list, sparsities: list, measurement_rates: list) -> dict:
+    """
+    Calculate phase transition data for compressive sensing.
+
+    Parameters
+    ----------
+    successes : list
+        List of success indicators (0 or 1).
+    sparsities : list
+        List of sparsity levels.
+    measurement_rates : list
+        List of measurement rates.
+
+    Returns
+    -------
+    dict
+        Dictionary with phase transition data.
+    """
+    # Group by parameters and compute success probability
+    from collections import defaultdict
+
+    data = defaultdict(list)
+    for s, sp, mr in zip(successes, sparsities, measurement_rates):
+        data[(sp, mr)].append(s)
+
+    phase_data = {}
+    for (sp, mr), succ_list in data.items():
+        success_prob = np.mean(succ_list)
+        phase_data[(sp, mr)] = success_prob
+
+    return phase_data
+
+
+def track_convergence(iterations: int, runtime: float, tolerance: float = None, error_history: list = None) -> dict:
+    """
+    Track convergence metrics.
+
+    Parameters
+    ----------
+    iterations : int
+        Number of iterations to converge.
+    runtime : float
+        Runtime in seconds.
+    tolerance : float, optional
+        Convergence tolerance used.
+    error_history : list, optional
+        List of error values over iterations.
+
+    Returns
+    -------
+    dict
+        Dictionary with convergence metrics.
+    """
+    metrics = {'iterations': iterations, 'runtime': runtime}
+
+    if tolerance is not None:
+        metrics['tolerance'] = tolerance
+
+    if error_history is not None:
+        metrics['final_error'] = error_history[-1] if error_history else None
+        metrics['error_history'] = error_history
+        if len(error_history) > 1:
+            metrics['convergence_rate'] = np.mean(np.diff(error_history))
+
+    return metrics
+
+
 def log_results(results, filepath='results/logs/experiment_log.txt'):
     import time
     import os
