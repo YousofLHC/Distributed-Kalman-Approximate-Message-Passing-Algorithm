@@ -212,12 +212,12 @@ def main():
             cmd = [sys.executable, "experiments/runners/run_experiment.py", "--config", str(conf), "--out", args.out]
             p = subprocess.Popen(cmd)
             processes.append(p)
-        for p in processes:
+        for p in tqdm(processes, desc="Waiting for processes"):
             p.wait()
         print("All parallel executions completed.")
     else:
         print("Running configs sequentially...")
-        for conf in selected_configs:
+        for conf in tqdm(selected_configs, desc="Configs"):
             print(f"Running {conf.name}...")
             try:
                 run_experiment(conf, args.out)
