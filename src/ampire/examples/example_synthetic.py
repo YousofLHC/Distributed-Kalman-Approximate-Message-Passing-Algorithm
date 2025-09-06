@@ -5,6 +5,8 @@ from ampire.distributed.distributed_kamp import DistributedKAMP
 from ampire.utils.visualization import plot_signal_comparison
 from ampire.utils.metrics import calculate_metrics, log_results
 import csv
+import pandas as pd
+import matplotlib.pyplot as plt
 import json
 import time
 from pathlib import Path
@@ -15,6 +17,18 @@ import time
 from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
+import csv
+import json
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.datasets import load_breast_cancer
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import OneClassSVM
+from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
+from typing import Tuple
+
 
 def _psnr(x_true, x_est):
     mse = np.mean((x_true - x_est) ** 2)
@@ -400,15 +414,15 @@ def run_image_cs_experiment(
                         extent=[min(deltas_sorted), max(deltas_sorted),
                                 min(lambdas_sorted), max(lambdas_sorted)])
         plt.colorbar(im, label=metric.upper())
-    
+
         # Use correct LaTeX: one backslash for Greek letters
         plt.xlabel(r"$\delta = M/N$")
         plt.ylabel(r"$\lambda$ (threshold)")
-    
+
         # Alternatively, avoid mathtext entirely:
         # plt.xlabel("δ = M/N")
         # plt.ylabel("λ (threshold)")
-    
+
         plt.title(f"Image CS {metric.upper()} Heatmap ({algorithm})")
         plt.xticks(deltas_sorted)
         plt.yticks(lambdas_sorted)
@@ -425,6 +439,258 @@ def run_image_cs_experiment(
     # output heatmaps for PSNR (you can also plot NMSE if desired)
     plot_heatmap("psnr", "KF-AMP", out_dir / "psnr_heatmap_KF-AMP.png")
     plot_heatmap("psnr", "AMP",    out_dir / "psnr_heatmap_AMP.png")
+
+def run_anomaly_detection_experiment(
+    train_fraction: float = 0.8,
+    lam1_list: Tuple[float, ...] = (0.01, 0.1),
+    max_iter: int = 20,
+    num_trials: int = 1,
+    output_dir: str = "results/anomaly_detection"
+):
+    # بارگذاری داده‌ها
+    data = load_breast_cancer()
+    X = data.data.astype(float)
+    y = data.target.astype(int)  # 1: benign (نرمال), 0: malignant (ناهنجاری)
+    # نرمال کردن ویژگی‌ها
+    scaler = StandardScaler()
+    X = scaler.fit_transform(X)
+    normal_X = X[y == 1]
+    anomaly_X = X[y == 0]
+
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+    csv_path = out_path / "anomaly_detection_results.csv"
+    jsonl_path = out_path / "anomaly_detection_results.jsonl"
+    # پاک کردن فایل‌های قبلی
+    if csv_path.exists(): csv_path.unlink()
+    if jsonl_path.exists(): jsonl_path.unlink()
+
+    rng = np.random.default_rng(0)
+    results = []
+
+    for trial in range(num_trials):
+        # تقسیم داده‌های نرمال به train و test
+        n_normal = len(normal_X)
+        perm = rng.permutation(n_normal)
+        split_idx = int(train_fraction * n_normal)
+        train_indices = perm[:split_idx]
+        test_indices = perm[split_idx:]
+
+        X_train = normal_X[train_indices]
+        # استفاده از زیرمجموعه‌ای از train به عنوان دیکشنری برای کاهش زمان محاسبه
+        max_dict = 50
+        if X_train.shape[0] > max_dict:
+            dict_indices = rng.choice(X_train.shape[0], size=max_dict, replace=False)
+            X_train_dict = X_train[dict_indices]
+        else:
+            X_train_dict = X_train
+        A = X_train_dict.T  # ماتریس اندازه‌گیری شکل (d, n_dict)
+
+        # داده‌های تست: باقی‌مانده‌های نرمال + همهٔ ناهنجاری‌ها
+        X_test = np.concatenate([normal_X[test_indices], anomaly_X], axis=0)
+        y_test = np.concatenate([
+            np.zeros(len(normal_X[test_indices])),  # برچسب 0 برای نرمال
+            np.ones(len(anomaly_X))                 # برچسب 1 برای ناهنجاری
+        ])
+        # محدود کردن تعداد نمونه‌های تست برای جلوگیری از اجراهای طولانی
+        max_test = 100
+        if X_test.shape[0] > max_test:
+            X_test = X_test[:max_test]
+            y_test = y_test[:max_test]
+
+        # روش پایه One‑Class SVM
+        ocsvm = OneClassSVM(kernel="rbf", gamma="auto").fit(X_train_dict)
+        ocsvm_scores = -ocsvm.decision_function(X_test)
+        baseline_row = {
+            "trial": trial,
+            "algo": "OCSVM",
+            "lambda1": None,
+            "roc_auc": roc_auc_score(y_test, ocsvm_scores),
+            "pr_auc": average_precision_score(y_test, ocsvm_scores),
+            # تعیین آستانه بر اساس صدک 95 داده‌های نرمال train
+            "f1": f1_score(y_test, (ocsvm_scores > np.quantile(-ocsvm.decision_function(X_train_dict), 0.95)).astype(int)),
+            "nmse": None,
+            "sparsity": None,
+            "runtime": None,
+        }
+        results.append(baseline_row)
+        # ذخیره خط به خط در فایل‌ها
+        with jsonl_path.open("a") as jf:
+            jf.write(json.dumps(baseline_row) + "\n")
+        with csv_path.open("a", newline="") as cf:
+            writer = csv.DictWriter(cf, fieldnames=baseline_row.keys())
+            if cf.tell() == 0: writer.writeheader()
+            writer.writerow(baseline_row)
+
+        # اجرای KAMP و AMP برای هر λ₁
+        for lam1 in lam1_list:
+            nmse_kamp_list, spars_kamp_list, kamp_scores = [], [], []
+            nmse_amp_list, spars_amp_list, amp_scores = [], [], []
+            for xi in X_test:
+                y_vec = xi.reshape(-1, 1)
+                # KAMP
+                kamp_solver = KAMP(alpha=0.5, tau=lam1, max_iter=max_iter)
+                kamp_solver.fit(A, y_vec)
+                x_hat = kamp_solver.solve()
+                kamp_scores.append(np.linalg.norm(A @ x_hat - y_vec))  # خطای بازسازی به عنوان امتیاز
+                nmse_kamp_list.append(np.mean((y_vec.flatten() - (A @ x_hat).flatten())**2) / np.mean(y_vec.flatten()**2))
+                spars_kamp_list.append(np.count_nonzero(np.abs(x_hat) > 1e-3) / x_hat.size)
+
+                # AMP به عنوان حالت پایه (Q=0)
+                kamp_solver.Q = np.zeros_like(kamp_solver.Q)
+                x_hat_amp = kamp_solver.solve()
+                amp_scores.append(np.linalg.norm(A @ x_hat_amp - y_vec))
+                nmse_amp_list.append(np.mean((y_vec.flatten() - (A @ x_hat_amp).flatten())**2) / np.mean(y_vec.flatten()**2))
+                spars_amp_list.append(np.count_nonzero(np.abs(x_hat_amp) > 1e-3) / x_hat_amp.size)
+
+            # تبدیل به آرایه برای محاسبه AUC و ... 
+            kamp_scores = np.array(kamp_scores)
+            amp_scores = np.array(amp_scores)
+
+            kamp_roc = roc_auc_score(y_test, kamp_scores)
+            kamp_pr = average_precision_score(y_test, kamp_scores)
+            # آستانه بر اساس صدک 95 امتیازات نمونه‌های نرمال
+            thresh_kamp = np.quantile(kamp_scores[y_test == 0], 0.95)
+            kamp_f1 = f1_score(y_test, (kamp_scores > thresh_kamp).astype(int))
+            kamp_row = {
+                "trial": trial, "algo": "KAMP", "lambda1": lam1,
+                "roc_auc": kamp_roc, "pr_auc": kamp_pr, "f1": kamp_f1,
+                "nmse": float(np.mean(nmse_kamp_list)),
+                "sparsity": float(np.mean(spars_kamp_list)),
+                "runtime": None,
+            }
+            # AMP
+            amp_roc = roc_auc_score(y_test, amp_scores)
+            amp_pr = average_precision_score(y_test, amp_scores)
+            thresh_amp = np.quantile(amp_scores[y_test == 0], 0.95)
+            amp_f1 = f1_score(y_test, (amp_scores > thresh_amp).astype(int))
+            amp_row = {
+                "trial": trial, "algo": "AMP", "lambda1": lam1,
+                "roc_auc": amp_roc, "pr_auc": amp_pr, "f1": amp_f1,
+                "nmse": float(np.mean(nmse_amp_list)),
+                "sparsity": float(np.mean(spars_amp_list)),
+                "runtime": None,
+            }
+            # ذخیره نتیجه‌ها
+            for row in (kamp_row, amp_row):
+                results.append(row)
+                with jsonl_path.open("a") as jf:
+                    jf.write(json.dumps(row) + "\n")
+                with csv_path.open("a", newline="") as cf:
+                    writer = csv.DictWriter(cf, fieldnames=row.keys())
+                    if cf.tell() == 0: writer.writeheader()
+                    writer.writerow(row)
+
+    # خلاصه‌سازی نتایج و ترسیم نمودار AUC بر حسب λ₁
+    df = pd.DataFrame(results)
+    summary = df.groupby(["algo", "lambda1"]).agg(
+        roc_auc_mean=("roc_auc", "mean"),
+        pr_auc_mean=("pr_auc", "mean"),
+        f1_mean=("f1", "mean"),
+        nmse_mean=("nmse", "mean"),
+        sparsity_mean=("sparsity", "mean")
+    ).reset_index()
+    summary.to_csv(out_path / "anomaly_detection_summary.csv", index=False)
+
+    # ترسیم نمودار ROC‑AUC و PR‑AUC
+    plt.figure(figsize=(6, 4))
+    for algo in summary["algo"].unique():
+        sub = summary[summary["algo"] == algo]
+        plt.plot(sub["lambda1"].astype(float), sub["roc_auc_mean"], marker="o", label=f"{algo} ROC‑AUC")
+        plt.plot(sub["lambda1"].astype(float), sub["pr_auc_mean"], linestyle="--", marker="x", label=f"{algo} PR‑AUC")
+    plt.xscale("log")
+    plt.xlabel(r"$\lambda_1$")
+    plt.ylabel("Mean AUC")
+    plt.title("One‑Class Anomaly Detection AUC vs $\\lambda_1$")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_path / "auc_vs_lambda.png", dpi=200)
+    plt.close()
+
+
+def run_matrix_mismatch_experiment(
+    n=500, rho=0.1, delta_list=(0.2, 0.4, 0.6),
+    ensembles=("gaussian", "heavy", "orthogonal"), trials=3,
+    lam1=0.01, max_iter=20, snr_db=40.0, output_dir="results/matrix_mismatch"
+):
+    """
+    اجرای آزمایش پایداری ماتریس برای الگوریتم‌های KAMP و AMP و ذخیره‌ی نتیجه‌ها در CSV/JSON.
+    """
+    import numpy as np
+    from pathlib import Path
+    import csv, json
+
+    rng = np.random.RandomState(0)
+    results = []
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = out_dir / "matrix_mismatch_results.csv"
+    jsonl_path = out_dir / "matrix_mismatch_results.jsonl"
+    # حذف فایل‌های قبلی
+    if csv_path.exists(): csv_path.unlink()
+    if jsonl_path.exists(): jsonl_path.unlink()
+
+    def generate_matrix(m, n, ensemble):
+        if ensemble == "gaussian":
+            return rng.randn(m, n) / np.sqrt(m)
+        elif ensemble == "heavy":
+            return rng.standard_t(df=2, size=(m, n)) / np.sqrt(m)
+        elif ensemble == "orthogonal":
+            B = rng.randn(n, n)
+            Q, _ = np.linalg.qr(B)
+            idx = rng.choice(n, size=m, replace=False)
+            return Q[idx, :] * np.sqrt(n / m)
+        else:
+            raise ValueError("Unknown ensemble")
+
+    def generate_sparse_signal(n, rho):
+        k = max(1, int(rho * n))
+        x0 = np.zeros((n, 1))
+        idx = rng.choice(n, size=k, replace=False)
+        x0[idx] = rng.randn(k, 1)
+        return x0
+
+    for ensemble in ensembles:
+        for delta in delta_list:
+            m = int(delta * n)
+            for algo in ("KAMP", "AMP"):
+                nmse_sum = 0.0
+                for _ in range(trials):
+                    x0 = generate_sparse_signal(n, rho)
+                    A = generate_matrix(m, n, ensemble)
+                    y0 = A @ x0
+                    # افزودن نویز
+                    sigma = np.linalg.norm(y0) / np.sqrt(m) * 10**(-snr_db/20)
+                    y = y0 + sigma * rng.randn(m, 1)
+                    # اجرای KAMP
+                    solver = KAMP(alpha=0.5, tau=lam1, max_iter=max_iter)
+                    solver.fit(A, y)
+                    if algo == "AMP":
+                        solver.Q = np.zeros((solver.n, solver.n))  # AMP
+                    x_hat = solver.solve()
+                    denom = np.mean(x0.flatten()**2)
+                    nmse = np.mean((x0.flatten() - x_hat.flatten())**2) / denom if denom > 0 else float("nan")
+                    nmse_sum += nmse
+                # ذخیره نتیجه‌ها
+                res = {
+                    "ensemble": ensemble,
+                    "delta": delta,
+                    "algo": algo,
+                    "nmse": nmse_sum / trials,
+                }
+                results.append(res)
+                # نوشتن در فایل CSV
+                with csv_path.open("a", newline="") as cf:
+                    writer = csv.DictWriter(cf, fieldnames=res.keys())
+                    if cf.tell() == 0:
+                        writer.writeheader()
+                    writer.writerow(res)
+                # نوشتن هر بار در JSONL
+                with jsonl_path.open("a") as jf:
+                    jf.write(json.dumps(res) + "\\n")
+
+    return results
+
 
 
 def run_image_example():
@@ -611,6 +877,53 @@ def plot_phase_heatmap(csv_file, algo, out_file):
     plt.savefig(out_file, dpi=200)
     plt.close()
 
+def plot_mismatch_heatmaps(results, output_dir="results/matrix_mismatch"):
+    """
+    رسم heatmap برای NMSE بر اساس نوع ماتریس و نسبت δ برای هر الگوریتم.
+    """
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    from pathlib import Path
+
+    out_path = Path(output_dir)
+    df = pd.DataFrame(results)
+    algos = df["algo"].unique()
+    ensembles = sorted(df["ensemble"].unique())
+    deltas = sorted(df["delta"].unique())
+
+    for algo in algos:
+        sub = df[df["algo"] == algo]
+        # تشکیل ماتریس Z با سطر=نوع ماتریس و ستون=δ
+        Z = np.zeros((len(ensembles), len(deltas)))
+        for i, ens in enumerate(ensembles):
+            for j, delta in enumerate(deltas):
+                row = sub[(sub["ensemble"] == ens) & (sub["delta"] == delta)]
+                Z[i, j] = row.iloc[0]["nmse"] if not row.empty else np.nan
+        plt.figure(figsize=(6, 4))
+        # استفاده از cmap پیش‌فرض
+        plt.imshow(Z, origin="lower", aspect="auto",
+                   extent=[min(deltas), max(deltas), 0, len(ensembles) - 1])
+        plt.colorbar(label="NMSE")
+        plt.yticks(range(len(ensembles)), ensembles)
+        plt.xticks(deltas)
+        plt.xlabel(r"$\delta = M/N$")
+        plt.ylabel("Ensemble")
+        plt.title(f"{algo} NMSE across ensembles and deltas")
+        # نوشتن مقدار هر سلول روی نمودار
+        for i, ens in enumerate(ensembles):
+            for j, delta in enumerate(deltas):
+                val = Z[i, j]
+                if not np.isnan(val):
+                    plt.text(delta, i, f"{val:.3f}",
+                             ha="center", va="center",
+                             color="white" if val > np.nanmax(Z) * 0.5 else "black",
+                             fontsize=7)
+        plt.tight_layout()
+        file_name = f"{algo.lower()}_nmse_heatmap.png"
+        plt.savefig(out_path / file_name, dpi=200)
+        plt.close()
+
 
 if __name__ == "__main__":
     #print("Running Synthetic Example...")
@@ -629,5 +942,10 @@ if __name__ == "__main__":
     #run_distributed_example()
     #print("\nRun phase transition experiment with default parameters...")
     #run_phase_transition_experiment()
-    print("\nRunning Image CS Example...")
-    run_image_cs_experiment()  
+    #print("\nRunning Image CS Example...")
+    #run_image_cs_experiment()  
+    #print("\nRunning Anomaly Detection Example...")
+    #run_anomaly_detection_experiment()
+    print("\nRunning Matrix Mismatch Example...")
+    results = run_matrix_mismatch_experiment()
+    plot_mismatch_heatmaps(results)

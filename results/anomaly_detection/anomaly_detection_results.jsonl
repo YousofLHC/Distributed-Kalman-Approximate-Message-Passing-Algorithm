@@ -1,0 +1,5 @@
+{"trial": 0, "algo": "OCSVM", "lambda1": null, "roc_auc": 0.9320436507936508, "pr_auc": 0.7674883016916973, "f1": 0.72, "nmse": null, "sparsity": null, "runtime": null}
+{"trial": 0, "algo": "KAMP", "lambda1": 0.01, "roc_auc": 0.8849206349206349, "pr_auc": 0.6999791283810841, "f1": 0.72, "nmse": 0.0018451684124446113, "sparsity": 0.8295999999999999, "runtime": null}
+{"trial": 0, "algo": "AMP", "lambda1": 0.01, "roc_auc": 0.8809523809523809, "pr_auc": 0.7255993624626395, "f1": 0.6938775510204082, "nmse": 0.0014331701979212997, "sparsity": 0.7757999999999999, "runtime": null}
+{"trial": 0, "algo": "KAMP", "lambda1": 0.1, "roc_auc": 0.8219246031746033, "pr_auc": 0.5599433043090444, "f1": 0.4, "nmse": 0.01596303078256775, "sparsity": 0.7840000000000003, "runtime": null}
+{"trial": 0, "algo": "AMP", "lambda1": 0.1, "roc_auc": 0.8075396825396824, "pr_auc": 0.6189381195226081, "f1": 0.43902439024390244, "nmse": 0.016984104401857235, "sparsity": 0.7802, "runtime": null}
