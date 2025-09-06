@@ -35,38 +35,54 @@ def run_synthetic_phase(cfg, outdir):
     lam2   = cfg.get("lambda2", 0.2)
     algo   = cfg.get("algo", "KF-AMP")  # 'AMP' | 'KF-AMP' | 'DKF-AMP'
     results = []
+    errors = {}
 
     for d in tqdm(grid["delta"], desc="Delta"):
         for r in tqdm(grid["rho"], desc="Rho"):
-            succ = 0; nmse_sum = 0.0; t_sum = 0.0
-            for _ in tqdm(range(grid["trials"]), desc="Trials"):
+            succ = 0; nmse_sum = 0.0; t_sum = 0.0; trial_count = 0
+            for trial_idx in tqdm(range(grid["trials"]), desc="Trials"):
                 A, x0, y, sigma = make_gaussian_cs(n=n, delta=d, rho=r, snr_db=grid["snr_db"])
                 t0 = time.time()
-                if algo == "KF-AMP":
-                    # Adjust to your actual API if needed:
-                    kamp = KAMP(alpha=0.5, tau=lam1, max_iter=100)
-                    est = kamp.fit(A, y).solve()
-                elif algo == "DKF-AMP":
-                    est = DistributedKAMP.from_matrix(A, y).fit().x_hat
-                else:
-                    # Simple baseline AMP via KF-AMP with Q=0 (if your code supports it)
-                    kamp = KAMP(alpha=0.5, tau=lam1, max_iter=100)
-                    kamp.fit(A, y)
-                    kamp.Q = 0.0  # Set Q to 0 for baseline
-                    est = kamp.solve()
-                t_sum += (time.time() - t0)
-                e = nmse(x0, est)
-                nmse_sum += e
-                succ += int(e < 1e-5)
-            results.append({
-                "delta": d, "rho": r,
-                "nmse": nmse_sum / grid["trials"],
-                "success": succ / grid["trials"],
-                "time": t_sum / grid["trials"]
-            })
-    log_jsonl(results, outdir / "synthetic_phase.jsonl")
+                try:
+                    if algo == "KF-AMP":
+                        # Adjust to your actual API if needed:
+                        kamp = KAMP(alpha=0.5, tau=lam1, max_iter=100)
+                        est = kamp.fit(A, y).solve()
+                    elif algo == "DKF-AMP":
+                        est = DistributedKAMP.from_matrix(A, y).fit().x_hat
+                    else:
+                        # Simple baseline AMP via KF-AMP with Q=0 (if your code supports it)
+                        kamp = KAMP(alpha=0.5, tau=lam1, max_iter=100)
+                        kamp.fit(A, y)
+                        kamp.Q = 0.0  # Set Q to 0 for baseline
+                        est = kamp.solve()
+                    t_sum += (time.time() - t0)
+                    e = nmse(x0, est)
+                    nmse_sum += e
+                    succ += int(e < 1e-5)
+                    trial_count += 1
+                except Exception as e:
+                    errors[f"{d}_{r}_{trial_idx}"] = str(e)
+                    continue
+            if trial_count > 0:
+                results.append({
+                    "delta": d, "rho": r,
+                    "nmse": nmse_sum / trial_count,
+                    "success": succ / trial_count,
+                    "time": t_sum / trial_count
+                })
+            else:
+                results.append({
+                    "delta": d, "rho": r,
+                    "nmse": float('inf'),
+                    "success": 0.0,
+                    "time": 0.0
+                })
+            log_jsonl(results, outdir / "synthetic_phase.jsonl")
     save_fig_phase(results, outdir / "phase_heatmap.png")
     save_metrics_table(results, outdir / "phase_table.tex")
+    with open(outdir / "errors.json", "w") as f:
+        json.dump(errors, f)
     return results
 
 def run_images_cs(cfg, outdir):
