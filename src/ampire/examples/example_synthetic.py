@@ -9,6 +9,21 @@ import json
 import time
 from pathlib import Path
 from tqdm import tqdm
+import csv
+import json
+import time
+from pathlib import Path
+import numpy as np
+import matplotlib.pyplot as plt
+
+def _psnr(x_true, x_est):
+    mse = np.mean((x_true - x_est) ** 2)
+    if mse == 0:
+        return float('inf')
+    return 10 * np.log10(1.0 / mse)
+
+def _sparsity(x_est, threshold=1e-3):
+    return float(np.count_nonzero(np.abs(x_est.flatten()) > threshold) / x_est.size)
 
 
 def get_sinusoidal_data(m=400, n=50, sigma2=0.01, random_state=42):
@@ -273,6 +288,143 @@ def run_phase_transition_experiment(
         for row in results:
             f_jsonl.write(json.dumps(row) + "\n")
     print(f"Saved results to {csv_path} and {jsonl_path}")
+def run_image_cs_experiment(
+    image_size=32,
+    deltas=(0.2, 0.4, 0.6),
+    lambdas=(0.01, 0.05, 0.1),
+    trials=2,
+    max_iter=20,
+    snr_db=40.0,
+    output_dir="results/image_cs_phase"
+):
+    """
+    Compressed-sensing image experiment using KAMP and an AMP baseline.
+    Results are saved incrementally to CSV/JSONL, and PSNR heatmaps
+    are generated at the end.
+    """
+    rng = np.random.RandomState(0)
+    x0_img = rng.rand(image_size, image_size)
+    n = image_size * image_size
+    x0_vec = x0_img.reshape(-1, 1)
+
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = out_dir / "image_cs_results.csv"
+    jsonl_path = out_dir / "image_cs_results.jsonl"
+    # reset old outputs
+    if csv_path.exists():
+        csv_path.unlink()
+    if jsonl_path.exists():
+        jsonl_path.unlink()
+
+    algorithms = ("KF-AMP", "AMP")
+    results = []
+    for algo in algorithms:
+        for delta in deltas:
+            for lam in lambdas:
+                nmse_sum = psnr_sum = sparsity_sum = time_sum = 0.0
+                for t in range(trials):
+                    m = int(delta * n)
+                    A = rng.randn(m, n) / np.sqrt(m)
+                    y0 = A @ x0_vec
+                    sigma = np.linalg.norm(y0) / np.sqrt(m) * 10**(-snr_db/20)
+                    y  = y0 + sigma * rng.randn(m, 1)
+
+                    start  = time.time()
+                    kamp   = KAMP(alpha=0.5, tau=lam, max_iter=max_iter)
+                    kamp.fit(A, y)
+                    if algo == "AMP":
+                        kamp.Q = np.zeros((kamp.n, kamp.n))
+                    x_est_vec = kamp.solve()
+                    elapsed = time.time() - start
+
+                    x_est_img = x_est_vec.reshape(image_size, image_size)
+                    psnr_val  = _psnr(x0_img, x_est_img)
+                    nmse_val  = float(np.mean((x0_vec.flatten() - x_est_vec.flatten())**2) /
+                                      np.mean(x0_vec.flatten()**2))
+                    sparsity_val = _sparsity(x_est_vec)
+
+                    # incremental save per trial
+                    trial_row = {
+                        "algo": algo,
+                        "delta": delta,
+                        "lambda1": lam,
+                        "trial": t,
+                        "psnr": psnr_val,
+                        "nmse": nmse_val,
+                        "sparsity": sparsity_val,
+                        "time": elapsed,
+                    }
+                    with open(jsonl_path, "a") as jf:
+                        jf.write(json.dumps(trial_row) + "\n")
+
+                    nmse_sum    += nmse_val
+                    psnr_sum    += psnr_val
+                    sparsity_sum += sparsity_val
+                    time_sum    += elapsed
+
+                # average metrics for summary
+                row = {
+                    "algo": algo,
+                    "delta": delta,
+                    "lambda1": lam,
+                    "psnr": psnr_sum / trials,
+                    "nmse": nmse_sum / trials,
+                    "sparsity": sparsity_sum / trials,
+                    "time": time_sum / trials,
+                }
+                results.append(row)
+                # append to CSV incrementally (write header if new)
+                write_header = not csv_path.exists()
+                with open(csv_path, "a", newline="") as cf:
+                    writer = csv.DictWriter(cf, fieldnames=list(row.keys()))
+                    if write_header:
+                        writer.writeheader()
+                    writer.writerow(row)
+
+    # create heatmaps
+    def plot_heatmap(metric, algorithm, out_file):
+        import pandas as pd
+        df = pd.DataFrame([r for r in results if r["algo"] == algorithm])
+        deltas_sorted  = sorted(df["delta"].unique())
+        lambdas_sorted = sorted(df["lambda1"].unique())
+        Z = np.zeros((len(lambdas_sorted), len(deltas_sorted)))
+        for i, lam in enumerate(lambdas_sorted):
+            for j, dlt in enumerate(deltas_sorted):
+                subset = df[(df["lambda1"] == lam) & (df["delta"] == dlt)]
+                Z[i, j] = subset.iloc[0][metric] if not subset.empty else 0
+
+        plt.figure(figsize=(6, 4))
+        cmap = plt.get_cmap("viridis")
+        im = plt.imshow(Z, origin="lower", aspect="auto", cmap=cmap,
+                        extent=[min(deltas_sorted), max(deltas_sorted),
+                                min(lambdas_sorted), max(lambdas_sorted)])
+        plt.colorbar(im, label=metric.upper())
+    
+        # Use correct LaTeX: one backslash for Greek letters
+        plt.xlabel(r"$\delta = M/N$")
+        plt.ylabel(r"$\lambda$ (threshold)")
+    
+        # Alternatively, avoid mathtext entirely:
+        # plt.xlabel("δ = M/N")
+        # plt.ylabel("λ (threshold)")
+    
+        plt.title(f"Image CS {metric.upper()} Heatmap ({algorithm})")
+        plt.xticks(deltas_sorted)
+        plt.yticks(lambdas_sorted)
+        for i, lam in enumerate(lambdas_sorted):
+            for j, dlt in enumerate(deltas_sorted):
+                val = Z[i, j]
+                plt.text(dlt, lam, f"{val:.2f}",
+                         ha="center", va="center",
+                         color="white" if val > 20 else "black", fontsize=8)
+        plt.tight_layout()
+        plt.savefig(out_file, dpi=200)
+        plt.close()
+
+    # output heatmaps for PSNR (you can also plot NMSE if desired)
+    plot_heatmap("psnr", "KF-AMP", out_dir / "psnr_heatmap_KF-AMP.png")
+    plot_heatmap("psnr", "AMP",    out_dir / "psnr_heatmap_AMP.png")
 
 
 def run_image_example():
@@ -475,5 +627,7 @@ if __name__ == "__main__":
     #run_audio_example()
     #print("\nRunning Distributed Example...")
     #run_distributed_example()
-    print("\nRun phase transition experiment with default parameters...")
-    run_phase_transition_experiment()
+    #print("\nRun phase transition experiment with default parameters...")
+    #run_phase_transition_experiment()
+    print("\nRunning Image CS Example...")
+    run_image_cs_experiment()  
