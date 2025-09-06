@@ -34,6 +34,26 @@ def run_solver(method, A, y):
         y_list = [y]
         dkamp = DistributedKAMP(alpha=0.5, tau=0.1, node_max_iter=100, num_triggers=1, graph=G, A_list=A_list, y_list=y_list)
         dkamp.fit()
+
+        # Plot and save topology
+        out_dir = 'experiments/results/exp3_image_cs'
+        os.makedirs(out_dir, exist_ok=True)
+
+        # Save adjacency matrix
+        adj_matrix = nx.to_numpy_array(G)
+        adj_path = os.path.join(out_dir, 'topology_single_node_adjacency.npy')
+        np.save(adj_path, adj_matrix)
+
+        # Plot topology
+        plt.figure(figsize=(6, 6))
+        pos = nx.spring_layout(G, seed=42)
+        nx.draw(G, pos, with_labels=True, node_color='lightblue',
+               node_size=500, font_size=16, font_weight='bold')
+        plt.title('Distributed KAMP Topology: Single Node')
+        plot_path = os.path.join(out_dir, 'topology_single_node_graph.png')
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+
         x_hat = dkamp.solve()
     else:
         raise ValueError(f"Unknown method {method}")
