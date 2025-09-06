@@ -8,10 +8,11 @@ from tqdm import tqdm
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from ampire.core.kamp import KAMP
 from ampire.utils.metrics import calculate_anomaly_detection_metrics
-from ..datasets.benchmark_loaders import load_odds_dataset  # Assuming this exists
+from experiments.datasets.benchmark_loaders import load_odds_dataset  # Assuming this exists
 
 def run_experiment():
     results = []

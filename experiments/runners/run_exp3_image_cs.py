@@ -7,10 +7,11 @@ from tqdm import tqdm
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from ampire.core.kamp import KAMP
 from ampire.utils.metrics import calculate_ssim
-from ..datasets.image_loaders import load_lena  # Assuming this function exists
+from experiments.datasets.image_loaders import load_lena  # Assuming this function exists
 
 def run_experiment():
     results = []
