@@ -7,9 +7,32 @@ from tqdm import tqdm
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
-from ampire.distributed.distributed_kamp import DKFAMP
+from ampire.core.kamp import KAMP
+from ampire.core.amp import AMP
+from ampire.distributed.distributed_kamp import DistributedKAMP
 from ampire.network.random_digraphs import generate_dag  # Assuming this exists
 from ampire.utils.metrics import calculate_compressive_sensing_metrics
+
+def run_solver(method, measurements, graph, x):
+    if method == 'DistributedKAMP':
+        A_list = [A for A, y in measurements]
+        y_list = [y for A, y in measurements]
+        dkamp = DistributedKAMP(alpha=0.5, tau=0.1, node_max_iter=50, num_triggers=100, graph=graph, A_list=A_list, y_list=y_list)
+        dkamp.fit()
+        x_hat = dkamp.solve()
+    elif method in ['AMP', 'KAMP']:
+        # Centralized: concatenate measurements
+        A_full = np.vstack([A for A, y in measurements])
+        y_full = np.concatenate([y for A, y in measurements])
+        if method == 'AMP':
+            solver = AMP(alpha=0.5, tau=0.1, max_iter=100)
+        else:
+            solver = KAMP(alpha=0.5, tau=0.1, max_iter=100)
+        solver.fit(A_full, y_full.reshape(-1, 1))
+        x_hat = solver.solve()
+    else:
+        raise ValueError(f"Unknown method {method}")
+    return x_hat
 
 def run_experiment():
     results = []
@@ -21,6 +44,7 @@ def run_experiment():
     topologies = ['dag', 'ring', 'self-loop']
     message_sizes = [10, 50, 100]
     consensus_errors = [0.01, 0.05, 0.1]
+    methods = ['AMP', 'KAMP', 'DistributedKAMP']
 
     # Generate sparse signal
     k = 50
@@ -47,23 +71,20 @@ def run_experiment():
                     y_i = A_i @ x + 0.01 * np.random.randn(m)
                     measurements.append((A_i, y_i))
 
-                # Run DistributedKAMP
-                A_list = [A for A, y in measurements]
-                y_list = [y for A, y in measurements]
-                dkfamp = DistributedKAMP(alpha=0.5, tau=0.1, node_max_iter=50, num_triggers=100, graph=graph, A_list=A_list, y_list=y_list)
-                dkfamp.fit()
-                x_hat = dkfamp.solve()
+                for method in methods:
+                    x_hat = run_solver(method, measurements, graph, x)
 
-                # Compute NMSE
-                metrics = calculate_compressive_sensing_metrics(x, x_hat)
-                nmse = metrics['nmse']
+                    # Compute NMSE
+                    metrics = calculate_compressive_sensing_metrics(x, x_hat)
+                    nmse = metrics['nmse']
 
-                results.append({
-                    'topology': topology,
-                    'message_size': msg_size,
-                    'consensus_error': cons_error,
-                    'nmse': nmse
-                })
+                    results.append({
+                        'topology': topology,
+                        'message_size': msg_size,
+                        'consensus_error': cons_error,
+                        'method': method,
+                        'nmse': nmse
+                    })
 
     return results
 

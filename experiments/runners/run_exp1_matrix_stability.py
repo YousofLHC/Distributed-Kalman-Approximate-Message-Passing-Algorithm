@@ -45,12 +45,13 @@ def generate_measurement_matrix(type_, n, m):
     elif type_ == 'heavy-tailed':
         return np.random.exponential(1, (m, n)) / np.sqrt(m)
     elif type_ == 'orthogonal':
-        # For m <= n take first m rows of Q from QR of n x n random matrix
+        # Build a stable orthonormal-row matrix for m <= n (common in CS experiments).
+        # If m <= n: generate an n x n random matrix, QR-decompose and take first m rows.
+        # If m > n: generate m x m random matrix, QR-decompose and take first n columns.
         if m <= n:
             Q, _ = np.linalg.qr(np.random.randn(n, n))
             return Q[:m, :n]
         else:
-            # m > n: take first n columns of Q from QR of m x m random matrix
             Q, _ = np.linalg.qr(np.random.randn(m, m))
             return Q[:, :n]
     else:
@@ -127,13 +128,13 @@ def run_experiment():
     results = []
     errors = {}
 
-    # Parameters (reduced for fast demo)
-    n = 500  # signal dimension
-    sparsities = [0.1]  # use single sparsity for clear comparison
-    measurement_rates = [0.5]  # single measurement rate
+    # Parameters
+    n = 1000  # Signal dimension
+    sparsities = [0.1, 0.2, 0.3]  # Sparsity levels
+    measurement_rates = [0.5, 0.7, 0.9]  # m/n
     matrix_types = ['orthogonal', 'gaussian', 'heavy-tailed']
     methods = ['KAMP', 'AMP', 'DistributedKAMP']
-    num_trials = 5
+    num_trials = 10
 
     out_dir = 'experiments/results/exp1_matrix_stability'
     os.makedirs(out_dir, exist_ok=True)

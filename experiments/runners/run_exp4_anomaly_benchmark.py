@@ -5,14 +5,42 @@ from sklearn.metrics import roc_auc_score, precision_recall_curve
 import sys
 import os
 from tqdm import tqdm
+import networkx as nx
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from ampire.core.kamp import KAMP
+from ampire.core.amp import AMP
+from ampire.distributed.distributed_kamp import DistributedKAMP
 from ampire.utils.metrics import calculate_anomaly_detection_metrics
 from experiments.datasets.benchmark_loaders import load_odds_dataset  # Assuming this exists
+
+def run_solver(method, X_train, X_test):
+    if method == 'KAMP':
+        kamp = KAMP(alpha=0.5, tau=0.1, max_iter=100)
+        kamp.fit(np.eye(X_train.shape[1]), X_train.T)
+        X_recon = kamp.solve().T
+        scores = np.sum((X_test - X_recon) ** 2, axis=1)
+    elif method == 'AMP':
+        amp = AMP(alpha=0.5, tau=0.1, max_iter=100)
+        amp.fit(np.eye(X_train.shape[1]), X_train.T)
+        X_recon = amp.solve().T
+        scores = np.sum((X_test - X_recon) ** 2, axis=1)
+    elif method == 'DistributedKAMP':
+        # Single-node
+        G = nx.DiGraph()
+        G.add_node(0)
+        A_list = [np.eye(X_train.shape[1])]
+        y_list = [X_train.T]
+        dkamp = DistributedKAMP(alpha=0.5, tau=0.1, node_max_iter=100, num_triggers=1, graph=G, A_list=A_list, y_list=y_list)
+        dkamp.fit()
+        X_recon = dkamp.solve().T
+        scores = np.sum((X_test - X_recon) ** 2, axis=1)
+    else:
+        raise ValueError(f"Unknown method {method}")
+    return scores
 
 def run_experiment():
     results = []
@@ -24,22 +52,10 @@ def run_experiment():
     X_test = X
     y_test = y
 
-    # Methods
-    methods = ['KAMP']  # Prioritize KAMP
-    # Other methods (deactivated for now):
-    # methods = ['KAMP', 'OCSVM']
+    methods = ['AMP', 'KAMP', 'DistributedKAMP']
 
     for method in methods:
-        if method == 'KAMP':
-            # Use KAMP for anomaly detection (simplified: reconstruction error)
-            kamp = KAMP(alpha=0.5, tau=0.1, max_iter=100)
-            kamp.fit(np.eye(X_train.shape[1]), X_train.T)  # Identity for simplicity
-            X_recon = kamp.solve().T
-            scores = np.sum((X_test - X_recon) ** 2, axis=1)  # Reconstruction error
-        elif method == 'OCSVM':
-            ocsvm = OneClassSVM()
-            ocsvm.fit(X_train)
-            scores = ocsvm.decision_function(X_test)
+        scores = run_solver(method, X_train, X_test)
 
         # Compute metrics
         auc_roc = roc_auc_score(y_test, scores)
