@@ -162,16 +162,15 @@ def run_experiment():
                 for method in methods:
                     x_hat = run_solver(method, measurements, graph, x)
 
-                    # Compute NMSE
+                    # Compute all compressive sensing metrics
                     metrics = calculate_compressive_sensing_metrics(x, x_hat)
-                    nmse = metrics['nmse']
 
                     results.append({
                         'topology': topology,
                         'message_size': msg_size,
                         'consensus_error': cons_error,
                         'method': method,
-                        'nmse': nmse
+                        **metrics  # Include all metrics from the function
                     })
 
     return results
@@ -199,7 +198,11 @@ def main():
                 "topology": result['topology'],
                 "message_size": result['message_size'],
                 "consensus_error": result['consensus_error'],
-                "nmse": result['nmse']
+                "mse": result['mse'],
+                "rmse": result['rmse'],
+                "nmse": result['nmse'],
+                "snr": result['snr'],
+                "peak_snr": result['peak_snr']
             }
             f.write(json.dumps(json_line) + '\n')
 
@@ -208,13 +211,17 @@ def main():
     for result in results:
         topology = result['topology']
         if topology not in topology_stats:
-            topology_stats[topology] = []
-        topology_stats[topology].append(result['nmse'])
+            topology_stats[topology] = {'nmse': [], 'mse': [], 'rmse': [], 'snr': [], 'peak_snr': []}
+        topology_stats[topology]['nmse'].append(result['nmse'])
+        topology_stats[topology]['mse'].append(result['mse'])
+        topology_stats[topology]['rmse'].append(result['rmse'])
+        topology_stats[topology]['snr'].append(result['snr'])
+        topology_stats[topology]['peak_snr'].append(result['peak_snr'])
 
     best_topology = None
     best_avg_nmse = float('inf')
-    for topology, nmse_values in topology_stats.items():
-        avg_nmse = np.mean(nmse_values)
+    for topology, metrics_dict in topology_stats.items():
+        avg_nmse = np.mean(metrics_dict['nmse'])
         if avg_nmse < best_avg_nmse:
             best_avg_nmse = avg_nmse
             best_topology = topology
@@ -222,13 +229,15 @@ def main():
     print(f"Results saved to {csv_path}, {excel_path}, and {jsonl_path}")
     print(f"Best topology: {best_topology} with average NMSE: {best_avg_nmse:.6f}")
 
-    # Print topology comparison
-    print("\nTopology Performance Comparison:")
-    print("-" * 40)
-    for topology, nmse_values in topology_stats.items():
-        avg_nmse = np.mean(nmse_values)
-        std_nmse = np.std(nmse_values)
-        print(f"{topology.upper():<12}: Avg NMSE = {avg_nmse:.6f} ± {std_nmse:.6f}")
+    # Print comprehensive topology comparison
+    print("\nTopology Performance Comparison (All Metrics):")
+    print("-" * 80)
+    for topology, metrics_dict in topology_stats.items():
+        print(f"\n{topology.upper()} Topology:")
+        for metric_name, values in metrics_dict.items():
+            avg_val = np.mean(values)
+            std_val = np.std(values)
+            print(f"  {metric_name.upper():<8}: Avg = {avg_val:.6f} ± {std_val:.6f}")
 
 if __name__ == '__main__':
     main()
