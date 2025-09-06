@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import argparse, json, time, os, yaml, sys
+import argparse, json, time, os, yaml, sys, subprocess
 import numpy as np
 from pathlib import Path
 from tqdm import tqdm
@@ -134,14 +134,30 @@ def run_odds_oc(cfg, outdir):
     save_metrics_table([res], outdir / f"odds_{ds}.tex")
     return res
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--config", required=True)
-    ap.add_argument("--out", default="experiments/results")
-    args = ap.parse_args()
+def list_and_choose_configs(configs):
+    print("Available config files:")
+    for i, c in enumerate(configs, 1):
+        print(f"{i}: {c.name}")
+    while True:
+        choice = input("Enter number(s) separated by comma, '*' for all sequential, or '**' for all parallel: ").strip()
+        if choice == "*":
+            return configs, False  # sequential
+        elif choice == "**":
+            return configs, True   # parallel
+        else:
+            try:
+                indices = [int(x.strip()) - 1 for x in choice.split(",")]
+                selected = [configs[i] for i in indices if 0 <= i < len(configs)]
+                if selected:
+                    return selected, False  # sequential
+                else:
+                    print("Invalid selection, try again.")
+            except ValueError:
+                print("Invalid input, try again.")
 
-    cfg = yaml.safe_load(open(args.config, "r"))
-    outdir = Path(args.out) / Path(args.config).stem
+def run_experiment(config_path, outdir_base):
+    cfg = yaml.safe_load(open(config_path, "r"))
+    outdir = Path(outdir_base) / config_path.stem
     outdir.mkdir(parents=True, exist_ok=True)
 
     task = cfg["task"]
@@ -149,7 +165,66 @@ def main():
     elif task == "image_cs":      run_images_cs(cfg, outdir)
     elif task == "distributed":   run_distributed_sensor(cfg, outdir)
     elif task == "odds_oc":       run_odds_oc(cfg, outdir)
-    else: raise ValueError("Unknown task")
+    else: raise ValueError(f"Unknown task in {config_path}")
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--config")
+    ap.add_argument("--out", default="experiments/results")
+    ap.add_argument("--parallel", action="store_true", help="Run selected configs in parallel")
+    args = ap.parse_args()
+
+    config_dir = Path("experiments/configs")
+    if not config_dir.exists():
+        print("Config directory 'experiments/configs' not found.")
+        return
+
+    configs = list(config_dir.glob("*.yaml"))
+    if not configs:
+        print("No YAML config files found in 'experiments/configs'.")
+        return
+
+    selected_configs = []
+    is_parallel = args.parallel
+
+    if args.config:
+        config_path = Path(args.config)
+        if config_path.exists():
+            selected_configs = [config_path]
+        else:
+            print(f"Config file '{args.config}' not found.")
+            selected_configs, is_parallel_choice = list_and_choose_configs(configs)
+            if is_parallel_choice:
+                is_parallel = True
+    else:
+        selected_configs, is_parallel_choice = list_and_choose_configs(configs)
+        if is_parallel_choice:
+            is_parallel = True
+
+    if not selected_configs:
+        print("No configs selected.")
+        return
+
+    if is_parallel:
+        print("Running configs in parallel...")
+        processes = []
+        for conf in selected_configs:
+            cmd = [sys.executable, "experiments/runners/run_experiment.py", "--config", str(conf), "--out", args.out]
+            p = subprocess.Popen(cmd)
+            processes.append(p)
+        for p in processes:
+            p.wait()
+        print("All parallel executions completed.")
+    else:
+        print("Running configs sequentially...")
+        for conf in selected_configs:
+            print(f"Running {conf.name}...")
+            try:
+                run_experiment(conf, args.out)
+                print(f"Completed {conf.name}.")
+            except Exception as e:
+                print(f"Error in {conf.name}: {e}")
+        print("All sequential executions completed.")
 
 if __name__ == "__main__":
     main()
