@@ -123,6 +123,8 @@ def run_odds_oc(cfg, outdir):
     lam2 = cfg.get("lambda2", 0.2)
     metric = cfg.get("metric", "rbf")
     X, y = load_odds_dataset(ds)
+    if X.shape[0] > 5000:
+        raise MemoryError(f"Dataset {ds} has {X.shape[0]} samples, too large for kernel computation. Consider subsampling.")
     model = EnetConvexHull(landa1=lam1, metric=metric)
     model.fit(X[y==0])       # train on normal samples only
     scores = model.score_samples(X)
