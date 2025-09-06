@@ -30,24 +30,26 @@ class KAMP(BaseEstimator):
         Derivative of denoising function, defaults to indicator: 1_{|r| > τ}.
     """
     def __init__(self,
-                 alpha          : float,
-                 tau            : float,
-                 max_iter       : int,
-                 tol            : float = 1e-8,
-                 denoiser       : Optional[Callable[[NDArray, float], NDArray]] = None,
-                 subdif_denoiser: Optional[Callable[[NDArray, float], NDArray]] = None): 
-        
+                  alpha          : float,
+                  tau            : float,
+                  max_iter       : int,
+                  tol            : float = 1e-8,
+                  denoiser       : Optional[Callable[[NDArray, float], NDArray]] = None,
+                  subdif_denoiser: Optional[Callable[[NDArray, float], NDArray]] = None,
+                  verbose        : bool = False):
+
         if not 0 <= alpha <= 1:
             raise ValueError("`alpha` must be in [0, 1]")
         if max_iter <= 0:
             raise ValueError("`max_iter` must be positive")
         if tol <= 0:
             raise ValueError("`tol` must be positive")
-        
+
         self.alpha           = alpha
         self.tau             = tau
         self.max_iter        = max_iter
         self.tol             = tol
+        self.verbose         = verbose
         self.denoiser        = denoiser or (lambda r, tau: np.sign(r) * np.maximum(np.abs(r) - tau, 0))
         self.subdif_denoiser = subdif_denoiser or (lambda r, tau: np.squeeze((np.abs(r) > tau).astype(float)))
 
@@ -293,7 +295,8 @@ class KAMP(BaseEstimator):
 
             # Check for NaN/inf values
             if np.any(np.isnan(self.x)) or np.any(np.isinf(self.x)):
-                print("Warning: NaN or inf values detected, stopping iteration")
+                if self.verbose:
+                    print("Warning: NaN or inf values detected, stopping iteration")
                 break
 
             diff_norm = np.linalg.norm(self.x - x_prev)
