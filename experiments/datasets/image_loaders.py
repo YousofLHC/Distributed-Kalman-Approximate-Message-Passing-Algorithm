@@ -1,13 +1,13 @@
 import numpy as np
-from scipy import misc
 
 def load_lena():
     """
-    Load the Lena image for testing.
+    Load a synthetic Lena-like image for testing.
 
     Returns:
         np.ndarray: Grayscale image array.
     """
-    # Use scipy.misc.face as a placeholder for Lena
-    image = misc.face(gray=True)
+    # Generate a synthetic 256x256 grayscale image
+    np.random.seed(42)
+    image = np.random.randint(0, 256, (256, 256), dtype=np.uint8)
     return image
