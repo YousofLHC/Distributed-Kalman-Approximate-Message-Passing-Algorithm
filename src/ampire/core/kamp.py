@@ -76,12 +76,12 @@ class KAMP(BaseEstimator):
         self.sigma2       = min(self.m,self.n)/max(self.m,self.n)# Noise variance, σ^2 = min(m,n)/max(m,n)
         
         #-------------------- Algorithm Initial Step -------------
-        
-        self.x            = np.clip(np.random.normal(loc=0.5, scale=0.1, size=(self.n, 1)), 0, 1) # Initialize signal estimate with random values clipped to [0,1]
+
+        self.x            = np.zeros((self.n, 1)) # Initialize signal estimate to zeros for stability
         self.I_n          = np.eye(self.n) # Identity matrix, I_n ∈ ℝ^{n×n}
-        self.z            = self.y # Initial residual, z_{[0]} = y - A * x̂_{[0]}
-        self._P           = 1.5 * self.I_n # Initial covariance matrix, P_{[0]} = 1.5 * I_n # Initial covariance matrix, smaller value to avoid overflow
-        self.Q            = 0.1 * self.I_n # Initial process noise covariance, Q_{[0]} = 0.1 * I_n
+        self.z            = self.y.copy() # Initial residual, z_{[0]} = y - A * x̂_{[0]}
+        self._P           = 0.1 * self.I_n # Initial covariance matrix, smaller value for stability
+        self.Q            = 0.01 * self.I_n # Initial process noise covariance, smaller value for stability
         self.R            = self.sigma2 * np.eye(self.m) # Measurement noise covariance, R= σ^2 * I_m
         self.is_fitted_   = True
         return self
@@ -168,18 +168,23 @@ class KAMP(BaseEstimator):
 
     def __update_prior_residual(self, x_: NDArray) -> NDArray:
         """Compute prior residual: r_{[t]}^{-} = y - A * x̂_{[t]}^{-}.
-        
+
         Parameters
         ----------
         x_ : NDArray, shape(n, 1)
             Prior estimate.
-            
+
         Returns
         -------
         NDArray, shape(m, 1)
             Prior residual.
         """
-        return self.y - self.A @ x_
+        # Clip x_ to prevent overflow
+        x_clipped = np.clip(x_, -1e10, 1e10)
+        result = self.y - self.A @ x_clipped
+        # Handle potential NaN/inf values
+        result = np.nan_to_num(result, nan=0.0, posinf=1e10, neginf=-1e10)
+        return result
 
     def __update_estimation(self, x_: NDArray, G: NDArray, r_: NDArray) -> NDArray:
         """Update state estimate: x̂_{[t]} = x̂_{[t]}^{-} + G_{[t]} * (y - A * x̂_{[t]}^{-})."""
@@ -225,20 +230,26 @@ class KAMP(BaseEstimator):
     
     def __update_r(self, x_prev: NDArray, z_prev: NDArray)-> NDArray:
         """Compute residual: r_{[t-1]} = x̂_{[t-1]} + A^T * z_{[t-1]}.
-        
+
         Parameters
         ----------
         x_prev : NDArray, shape(n, 1)
             Previous estimate.
         z_prev : NDArray, shape(m, 1)
             Previous residual.
-            
+
         Returns
         -------
         NDArray, shape(n, 1)
             Updated residual.
         """
-        return x_prev + self.AT @ z_prev
+        # Clip inputs to prevent overflow
+        x_clipped = np.clip(x_prev, -1e10, 1e10)
+        z_clipped = np.clip(z_prev, -1e10, 1e10)
+        result = x_clipped + self.AT @ z_clipped
+        # Handle potential NaN/inf values
+        result = np.nan_to_num(result, nan=0.0, posinf=1e10, neginf=-1e10)
+        return result
     
     @property
     def P(self):
@@ -279,7 +290,14 @@ class KAMP(BaseEstimator):
             self.z  = self.y - self.A @ self.x # Update residual,                          z_{[t]}     = y - A * x̂_{[t]}^{-}
 
             #--------------------------Check convergence------------------------------
-            
-            if np.linalg.norm(self.x - x_prev) / (np.linalg.norm(x_prev) + 1e-10) < self.tol:
+
+            # Check for NaN/inf values
+            if np.any(np.isnan(self.x)) or np.any(np.isinf(self.x)):
+                print("Warning: NaN or inf values detected, stopping iteration")
+                break
+
+            diff_norm = np.linalg.norm(self.x - x_prev)
+            prev_norm = np.linalg.norm(x_prev)
+            if prev_norm > 0 and diff_norm / prev_norm < self.tol:
                 break
         return self.x

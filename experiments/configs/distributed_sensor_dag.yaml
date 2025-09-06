@@ -1,0 +1,5 @@
+task: distributed
+topology: dag   # dag | cycle | selfloop | mixed
+dkamp:
+  max_iters: 50
+  consensus_tol: 1e-3

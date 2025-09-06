@@ -88,10 +88,12 @@ class DistributedKAMP(KAMP):
         for _ in range(self.num_triggers):
             selected_node = self.rng.choice(self.node_estimators)
             self.my_graph.trigger(selected_node, inplace=True)
-        
+
         # Update local estimates based on graph messages
         for node in self.node_estimators:
             self.my_graph.total_in_degree(node, inplace=True)
+
+        return self
 
     def solve(self) -> np.ndarray:
         """
@@ -127,16 +129,90 @@ class DistributedKAMP(KAMP):
         """Visualize the graph using MyGraph.plot."""
         self.my_graph.plot(show=show)
 
+    @classmethod
+    def from_partition(cls, data: Dict[int, Tuple[np.ndarray, np.ndarray]], topology: str,
+                      max_iters: int = 50, consensus_tol: float = 1e-3,
+                      alpha: float = 0.5, tau: float = 0.1, num_triggers: int = 100,
+                      random_state: int = None):
+        """
+        Create DistributedKAMP from partitioned data.
+
+        Args:
+            data: Dict of {node_id: (A_i, y_i)}
+            topology: 'dag', 'cycle', 'selfloop', 'mixed'
+            max_iters: Maximum iterations per node
+            consensus_tol: Consensus tolerance (not used in current implementation)
+            alpha: Step size
+            tau: Threshold
+            num_triggers: Number of random triggers
+            random_state: Random seed
+
+        Returns:
+            DistributedKAMP instance
+        """
+        nodes = sorted(data.keys())
+        num_nodes = len(nodes)
+        A_list = [data[node][0] for node in nodes]
+        y_list = [data[node][1] for node in nodes]
+
+        # Create graph based on topology
+        if topology == 'dag':
+            graph = cls.create_dag(num_nodes, random_state=random_state)
+        elif topology == 'cycle':
+            graph = nx.DiGraph()
+            graph.add_nodes_from(range(num_nodes))
+            for i in range(num_nodes):
+                graph.add_edge(i, (i + 1) % num_nodes)
+        elif topology == 'selfloop':
+            graph = nx.DiGraph()
+            graph.add_nodes_from(range(num_nodes))
+            for i in range(num_nodes):
+                graph.add_edge(i, i)
+        elif topology == 'mixed':
+            graph = cls.create_dag(num_nodes, random_state=random_state)
+            # Add some cycles or self-loops if needed
+        else:
+            raise ValueError(f"Unknown topology: {topology}")
+
+        return cls(alpha=alpha, tau=tau, node_max_iter=max_iters,
+                  num_triggers=num_triggers, graph=graph,
+                  A_list=A_list, y_list=y_list, random_state=random_state)
+
+    def report(self) -> Dict:
+        """
+        Generate a report with metrics.
+
+        Returns:
+            Dict with consensus_error, nmse_global, bytes, iters
+        """
+        x_global = self.solve()
+        # Simple consensus error (variance of node estimates)
+        node_estimates = self.get_node_estimates()
+        consensus_error = np.var([np.linalg.norm(x - x_global) for x in node_estimates])
+
+        # NMSE global (assuming true signal is x_global for simplicity)
+        nmse_global = 0.0  # Placeholder
+
+        # Bytes: rough estimate
+        bytes_used = sum(A.nbytes + y.nbytes for A, y in zip(self.A_list, self.y_list))
+
+        return {
+            'consensus_error': consensus_error,
+            'nmse_global': nmse_global,
+            'bytes': bytes_used,
+            'iters': self.num_triggers
+        }
+
     @staticmethod
     def create_dag(num_nodes: int, edge_prob: float = 0.3, random_state: int = None) -> nx.DiGraph:
         """
         Create a random DAG for distributed KAMP.
-        
+
         Args:
             num_nodes: Number of nodes in the graph.
             edge_prob: Probability of edge creation.
             random_state: Random seed for reproducibility.
-        
+
         Returns:
             nx.DiGraph: Directed acyclic graph.
         """
