@@ -62,7 +62,7 @@ def main():
     n = 70  # dimension of the signal
     m = 5000  # number of samples per measurement
     results = []
-    for num_nodes in tqdm.tqdm(node_counts, desc="Processing node counts"):
+    for num_nodes in tqdm(node_counts, desc="Processing node counts"):
         print(f"\nProcessing {num_nodes} nodes...")
         # generate synthetic data for this num_nodes
         A_list, y_list, x_true = create_synthetic_data(num_nodes=num_nodes, n=n, m=m)
