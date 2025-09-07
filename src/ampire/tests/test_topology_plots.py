@@ -1,6 +1,7 @@
 # src/ampire/tests/test_topology_plots.py
 import matplotlib.pyplot as plt
 import networkx as nx
+import numpy as np
 import os
 import sys
 sys.path.insert(0, 'src')
@@ -21,6 +22,10 @@ def plot_graph(G, title, filename):
     plt.title(title)
     plt.savefig(filename)
     plt.close()
+
+def save_adjacency_matrix(G, filename):
+    adj = nx.to_numpy_array(G, dtype=int)
+    np.savetxt(filename, adj, fmt='%d')
 
 # List of generators
 generators = [
@@ -66,8 +71,10 @@ for name, func in generators:
         try:
             G = func(**full_params)
             title = f"{name} - Nodes: {full_params.get('num_nodes', 'N/A')}, Edge Prob: {full_params.get('edge_prob', 'N/A')}"
-            filename = os.path.join(plots_dir, f"graph_{graph_count:02d}_{name.replace(' ', '_')}.png")
-            plot_graph(G, title, filename)
+            plot_filename = os.path.join(plots_dir, f"graph_{graph_count:02d}_{name.replace(' ', '_')}.png")
+            matrix_filename = os.path.join(plots_dir, f"graph_{graph_count:02d}_{name.replace(' ', '_')}_adj.txt")
+            plot_graph(G, title, plot_filename)
+            save_adjacency_matrix(G, matrix_filename)
             graph_count += 1
             if graph_count >= 20:
                 break
@@ -76,4 +83,4 @@ for name, func in generators:
     if graph_count >= 20:
         break
 
-print(f"Generated {graph_count} graphs. Plots saved in '{plots_dir}' directory.")
+print(f"Generated {graph_count} graphs. Plots and adjacency matrices saved in '{plots_dir}' directory.")
