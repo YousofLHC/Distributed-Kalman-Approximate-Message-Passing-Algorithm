@@ -1,0 +1,37 @@
+# configs/topologies.yaml
+# the names (dag_no_cycles, directed_with_cycles, etc.) will be used later when saving results.
+topologies:
+  - name: dag_no_cycles
+    type: dag
+    params:
+      edge_prob: 0.3
+
+  - name: directed_with_cycles
+    type: directed_with_cycles
+    params:
+      edge_prob: 0.4
+
+  - name: directed_with_cycles_and_loops
+    type: directed_with_cycles_and_loops
+    params:
+      edge_prob: 0.3
+      self_loop_prob: 0.05
+
+  - name: star_with_extra_edges
+    type: star_with_extra_edges
+    params:
+      extra_edge_prob: 0.1
+
+  - name: leafs_to_final_node
+    type: leafs_to_final_node
+
+  - name: tree_with_leaf_connections
+    type: tree_with_leaf_connections
+    params:
+      leaf_edge_prob: 0.2
+      back_edge_prob: 0.1
+
+  - name: bidirectional
+    type: bidirectional
+    params:
+      bidirectional_prob: 0.2
