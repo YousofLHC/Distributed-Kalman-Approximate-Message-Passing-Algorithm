@@ -1,9 +1,11 @@
 import numpy as np
 import networkx as nx
+import os
+import logging
 from typing import List, Dict, Tuple, Union
-from ..core.kamp import KAMP
-from ..network.graph import MyGraph, Node
-from ..network.random_digraphs import create_strongly_connected_graph
+from ampire.core.kamp import KAMP
+from ampire.network.graph import MyGraph, Node
+from ampire.network.random_digraphs import create_strongly_connected_graph
 
 class DistributedKAMP(KAMP):
     """
@@ -39,6 +41,10 @@ class DistributedKAMP(KAMP):
         self.y_list = y_list
         self.random_state = random_state
         self.rng = np.random.RandomState(random_state)
+        # Set up logging
+        log_dir = 'src/ampire/examples/results/logs'
+        os.makedirs(log_dir, exist_ok=True)
+        logging.basicConfig(filename=os.path.join(log_dir, 'error_log.txt'), level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
         
         # Validate inputs
         self.nodes = list(graph.nodes)
@@ -46,8 +52,19 @@ class DistributedKAMP(KAMP):
         self.just_dag = just_dag
         if just_dag and not nx.is_directed_acyclic_graph(graph):
             raise ValueError("Graph must be a directed acyclic graph (DAG).")
-        if len(A_list) != self.num_nodes or len(y_list) != self.num_nodes:
-            raise ValueError("A_list and y_list must match the number of nodes in the graph.")
+        if len(A_list) != len(y_list):
+            raise ValueError("A_list and y_list must have the same length.")
+        if len(A_list) != self.num_nodes:
+            self.num_nodes = len(A_list)
+            self.nodes = list(range(self.num_nodes))
+            # Add missing nodes to graph
+            for i in range(self.num_nodes):
+                if i not in self.graph:
+                    self.graph.add_node(i)
+            if verbose:
+                print("Mismatch detected: Using len(A_list) as number of nodes.")
+            else:
+                logging.error("Mismatch in A_list and y_list lengths with graph nodes. Using len(A_list) as number of nodes.")
         self.n = A_list[0].shape[1]
         if not all(A.shape[1] == self.n for A in A_list):
             raise ValueError("All measurement matrices must have the same number of columns.")
@@ -57,10 +74,22 @@ class DistributedKAMP(KAMP):
         # Handle node_max_iter (single int or list)
         if isinstance(node_max_iter, int):
             self.node_max_iter = [node_max_iter] * self.num_nodes
-        elif isinstance(node_max_iter, list) and len(node_max_iter) == self.num_nodes:
-            self.node_max_iter = node_max_iter
+        elif isinstance(node_max_iter, list):
+            if len(node_max_iter) == self.num_nodes:
+                self.node_max_iter = node_max_iter
+            else:
+                # Adjust to match
+                if len(node_max_iter) > self.num_nodes:
+                    self.node_max_iter = node_max_iter[:self.num_nodes]
+                else:
+                    last = node_max_iter[-1] if node_max_iter else 10
+                    self.node_max_iter = node_max_iter + [last] * (self.num_nodes - len(node_max_iter))
+                if verbose:
+                    print("Adjusted node_max_iter to match new number of nodes.")
+                else:
+                    logging.error("Adjusted node_max_iter to match new number of nodes.")
         else:
-            raise ValueError("node_max_iter must be an int or a list matching the number of nodes.")
+            raise ValueError("node_max_iter must be an int or a list.")
         
         # Initialize node estimators with varying max_iter
         self.node_estimators = [
@@ -220,7 +249,7 @@ class DistributedKAMP(KAMP):
         }
 
     @staticmethod
-    def create_dag(num_nodes: int, edge_prob: float = 0.3, random_state: int = None) -> MyGraph:
+    def create_dag(num_nodes: int, edge_prob: float = 0.9, random_state: int = None) -> MyGraph:
         """
         Create a random DAG for distributed KAMP.
 
