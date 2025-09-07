@@ -2,6 +2,38 @@ import numpy as np
 from ..distributed.distributed_kamp import DistributedKAMP
 from ..network.graph import MyGraph, Node
 from ..core.kamp import KAMP
+import yaml
+from pathlib import Path
+from ..network.topology_generators import (
+    create_dag, create_directed_with_cycles, create_directed_with_cycles_and_loops,
+    create_star_with_extra_edges, create_leafs_to_final_node, create_tree_with_leaf_connections,
+    create_bidirectional
+)
+
+def load_topologies(config_path: str):
+    with open(config_path, 'r') as f:
+        return yaml.safe_load(f)['topologies']
+    
+def get_graph(topology_spec, num_nodes, rng):
+    t = topology_spec['type']
+    params = topology_spec.get('params', {})
+    if t == 'dag':
+        return MyGraph(create_dag(num_nodes, **params, rng=rng))
+    elif t == 'directed_with_cycles':
+        return MyGraph(create_directed_with_cycles(num_nodes, **params, rng=rng))
+    elif t == 'directed_with_cycles_and_loops':
+        return MyGraph(create_directed_with_cycles_and_loops(num_nodes, **params, rng=rng))
+    elif t == 'star_with_extra_edges':
+        return MyGraph(create_star_with_extra_edges(num_nodes, **params, rng=rng))
+    elif t == 'leafs_to_final_node':
+        return MyGraph(create_leafs_to_final_node(num_nodes, **params, rng=rng))
+    elif t == 'tree_with_leaf_connections':
+        return MyGraph(create_tree_with_leaf_connections(num_nodes, **params, rng=rng))
+    elif t == 'bidirectional':
+        return MyGraph(create_bidirectional(num_nodes, **params, rng=rng))
+    else:
+        raise ValueError(f"Unknown topology type: {t}")
+
 
 def create_synthetic_data(num_nodes=5, n=10, m=20):
     """Create synthetic data for testing."""
@@ -17,72 +49,64 @@ def create_synthetic_data(num_nodes=5, n=10, m=20):
         y_list.append(y)
     return A_list, y_list, x_true
 
-def test_distributed_kamp():
-    """Test the refactored DistributedKAMP with MyGraph."""
-    print("Testing DistributedKAMP with MyGraph...")
-
-    # Create synthetic data
-    num_nodes = 5
-    A_list, y_list, x_true = create_synthetic_data(num_nodes)
-
-    # Create graph using MyGraph
-    graph = MyGraph()
-    graph.add_nodes_from(range(num_nodes))
-    # Add some edges
-    graph.add_edge(0, 1, weight=0.5)
-    graph.add_edge(1, 2, weight=0.7)
-    graph.add_edge(2, 3, weight=0.6)
-    graph.add_edge(3, 4, weight=0.8)
-    graph.add_edge(0, 4, weight=0.4)
-
-    # Initialize DistributedKAMP
-    dkamp = DistributedKAMP(
-        alpha=0.5,
-        tau=0.1,
-        node_max_iter=10,
-        num_triggers=20,
-        graph=graph,
-        A_list=A_list,
-        y_list=y_list,
-        random_state=42,
-        verbose=True
-    )
-
-    # Fit the model
-    dkamp.fit()
-
-    # Get results
-    x_global = dkamp.solve()
-    node_estimates = dkamp.get_node_estimates()
-
-    print(f"True signal norm: {np.linalg.norm(x_true):.4f}")
-    print(f"Global estimate norm: {np.linalg.norm(x_global):.4f}")
-    print(f"Estimation error: {np.linalg.norm(x_global - x_true):.4f}")
-
-    # Show edge weights
-    print("\nEdge weights:")
-    for u, v, data in graph.edges(data=True):
-        print(f"Edge {u} -> {v}: weight = {data['weight']:.2f}")
-
-    # Show information passing (node estimates)
-    print("\nNode estimates:")
-    for i, x in enumerate(node_estimates):
-        print(f"Node {i}: norm = {np.linalg.norm(x):.4f}")
-
-    # Plot the graph
-    print("\nPlotting the graph...")
-    dkamp.plot_graph(show=False)  # Set show=False to avoid blocking
-    import matplotlib.pyplot as plt
-    plt.savefig('distributed_kamp_graph.png')
-    print("Graph plot saved as 'distributed_kamp_graph.png'")
-
-    # Save adjacency matrix
-    print("\nSaving adjacency matrix...")
-    adj_matrix = graph.save_adjacency_matrix('distributed_kamp_adjacency')
-    print("Adjacency matrix:")
-    print(adj_matrix)
-
-    return dkamp
+def main():
+    topologies = load_topologies('configs/topologies.yaml')
+    node_counts = [5, 10, 15, 25, 30, 50, 60, 100, 150, 200]
+    results = []
+    for topo in topologies:
+        for num_nodes in node_counts:
+            m = 200  # number of samples per measurement; adjust as needed
+            if num_nodes > m:
+                continue  # skip if more nodes than samples
+            # generate synthetic data with m samples
+            A_list, y_list, x_true = create_synthetic_data(num_nodes=num_nodes, n=10, m=m)
+            # create graph using topology
+            rng = np.random.RandomState(42)
+            graph_nx = get_graph(topo, num_nodes, rng)
+            # since DistributedKAMP expects a MyGraph, we can convert:
+            G = MyGraph()
+            G.add_nodes_from(graph_nx.nodes())
+            for u, v in graph_nx.edges():
+                # assign placeholder weight, will be randomized internally
+                G.add_edge(u, v, weight=1.0)
+            dkamp = DistributedKAMP(alpha=0.5, tau=0.1,
+                                    node_max_iter=10,
+                                    num_triggers=20,
+                                    graph=G,
+                                    A_list=A_list,
+                                    y_list=y_list,
+                                    random_state=42,
+                                    verbose=False,
+                                    record_history=True)
+            dkamp.fit()
+            # save per-trigger history
+            history_file = f"logs/{topo['name']}_nodes{num_nodes}_history.json"
+            Path('logs').mkdir(exist_ok=True)
+            dkamp.save_history(history_file)
+            # save graph figure
+            figure_path = f"graphs/{topo['name']}_nodes{num_nodes}.png"
+            Path('graphs').mkdir(exist_ok=True)
+            dkamp.plot_graph(show=False)
+            import matplotlib.pyplot as plt
+            plt.savefig(figure_path)
+            # save adjacency matrix
+            adj_path = f"adjacency/{topo['name']}_nodes{num_nodes}.npy"
+            Path('adjacency').mkdir(exist_ok=True)
+            np.save(adj_path, G.get_adjacency_matrix())
+            # compute summary metrics
+            report = dkamp.report()
+            results.append({
+                'topology': topo['name'],
+                'num_nodes': num_nodes,
+                'consensus_error': report['consensus_error'],
+                'bytes': report['bytes']
+            })
+    # choose the three best topologies by consensus error
+    results_sorted = sorted(results, key=lambda r: r['consensus_error'])
+    best_three = results_sorted[:3]
+    with open('best_topologies.json', 'w') as f:
+        import json
+        json.dump(best_three, f, indent=2)
 
 if __name__ == "__main__":
-    dkamp = test_distributed_kamp()
+    main()
