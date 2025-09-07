@@ -258,6 +258,9 @@ def main():
 
     # Loop over Complex and 2D data
     for is_2d in [True, False]:
+        # Define data_type early to avoid UnboundLocalError in exception handlers
+        data_type = '2d' if is_2d else 'Complex'
+
         print(f"\n{'='*50}")
         print(f"Testing with {'2D' if is_2d else 'Complex'} synthetic data")
         print(f"{'='*50}")
@@ -299,9 +302,6 @@ def main():
             # Use default parameters if grid search fails
             optimal_params = {'alpha': 0.5, 'tau': 0.1, 'node_max_iter': 50, 'num_triggers': 100}
             print(f"Using default parameters: {optimal_params}")
-
-        # Create directory for plots
-        data_type = '2d' if is_2d else 'Complex'
         plots_dir = f'distributed_kamp_plots_{data_type}'
         os.makedirs(plots_dir, exist_ok=True)
 
