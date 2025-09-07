@@ -330,6 +330,22 @@ def main():
                     json.dump(results, f, indent=4)
             except Exception as e:
                 logging.error(f"Error saving current results at topology {i}: {e}")
+
+            # Save progress summary every 2 topologies
+            try:
+                if (i + 1) % 2 == 0:
+                    progress_summary = {
+                        'data_type': data_type,
+                        'current_topology': i + 1,
+                        'total_topologies': len(adj_files),
+                        'results_so_far': len(results),
+                        'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    progress_file = f'{intermediate_dir}/progress_{data_type}_topology_{i+1}.json'
+                    with open(progress_file, 'w') as f:
+                        json.dump(progress_summary, f, indent=4)
+            except Exception as e:
+                logging.error(f"Error saving progress at topology {i}: {e}")
             try:
                 pbar.set_description(f"Processing {os.path.basename(adj_file)}")
                 # Load adjacency matrix
@@ -383,6 +399,24 @@ def main():
 
                 x_est = dk.solve()
                 node_estimates = dk.get_node_estimates()
+
+                # Save execution results immediately after DistributedKAMP run
+                try:
+                    execution_result = {
+                        'topology': os.path.basename(adj_file),
+                        'data_type': data_type,
+                        'num_nodes': num_nodes,
+                        'fit_time': fit_time,
+                        'x_est_shape': x_est.shape if x_est is not None else None,
+                        'node_estimates_count': len(node_estimates),
+                        'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    execution_file = f'{intermediate_dir}/execution_result_{os.path.basename(adj_file).replace(".txt", "")}_{data_type}.json'
+                    with open(execution_file, 'w') as f:
+                        json.dump(execution_result, f, indent=4)
+                except Exception as e:
+                    logging.error(f"Error saving execution result for {adj_file}: {e}")
+
             except Exception as e:
                 logging.error(f"Error running DistributedKAMP for {adj_file}: {e}")
                 print(f"Warning: Error running DistributedKAMP for {adj_file}: {e}")
@@ -390,8 +424,9 @@ def main():
 
             # Plot original vs reconstructed
             try:
-                if is_2d and x_true_2d is not None:
-                    # For 2D data: use imshow for comparison (measurement matrix 900×2)
+                # Use imshow only if number of features >= 10
+                if num_features >= 10 and x_true_2d is not None:
+                    # For high-dimensional data: use imshow for comparison
                     x_est_2d = x_est.reshape(x_true_2d.shape)
                     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
                     im1 = axes[0].imshow(x_true_2d, cmap='viridis', aspect='auto')
@@ -401,7 +436,7 @@ def main():
                     axes[1].set_title('Reconstructed Signal')
                     plt.colorbar(im2, ax=axes[1], label='Value')
                 else:
-                    # For Complex data: create comprehensive visualization (measurement matrix 900×70)
+                    # For low-dimensional data: create comprehensive visualization
                     fig = plt.figure(figsize=(15, 10))
 
                     # Subplot 1: Measurement matrix A
@@ -453,6 +488,24 @@ def main():
                 plot_file = os.path.join(plots_dir, f"{os.path.basename(adj_file).replace('.txt', '')}_reconstruction.png")
                 plt.savefig(plot_file, dpi=150, bbox_inches='tight')
                 plt.close()
+
+                # Save plot metadata
+                try:
+                    plot_metadata = {
+                        'topology': os.path.basename(adj_file),
+                        'data_type': data_type,
+                        'plot_type': 'imshow' if num_features >= 10 and x_true_2d is not None else 'line_plot',
+                        'num_features': num_features,
+                        'nmse_value': nmse_placeholder,
+                        'plot_file': plot_file,
+                        'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    metadata_file = f'{intermediate_dir}/plot_metadata_{os.path.basename(adj_file).replace(".txt", "")}_{data_type}.json'
+                    with open(metadata_file, 'w') as f:
+                        json.dump(plot_metadata, f, indent=4)
+                except Exception as e:
+                    logging.error(f"Error saving plot metadata for {adj_file}: {e}")
+
             except Exception as e:
                 logging.error(f"Error creating/saving plot for {adj_file}: {e}")
                 print(f"Warning: Error creating/saving plot for {adj_file}: {e}")
@@ -489,6 +542,27 @@ def main():
 
                 # Get report
                 report = dk.report()
+
+                # Save metrics results immediately after computation
+                try:
+                    metrics_result = {
+                        'topology': os.path.basename(adj_file),
+                        'data_type': data_type,
+                        'nmse_global': nmse_global,
+                        'mean_nmse_per_node': mean_nmse_per_node,
+                        'std_nmse_per_node': std_nmse_per_node,
+                        'consensus_error': consensus_error,
+                        'bytes': report['bytes'],
+                        'iters': report['iters'],
+                        'fit_time': fit_time,
+                        'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
+                    }
+                    metrics_file = f'{intermediate_dir}/metrics_result_{os.path.basename(adj_file).replace(".txt", "")}_{data_type}.json'
+                    with open(metrics_file, 'w') as f:
+                        json.dump(metrics_result, f, indent=4)
+                except Exception as e:
+                    logging.error(f"Error saving metrics result for {adj_file}: {e}")
+
             except Exception as e:
                 logging.error(f"Error computing metrics for {adj_file}: {e}")
                 print(f"Warning: Error computing metrics for {adj_file}: {e}")
