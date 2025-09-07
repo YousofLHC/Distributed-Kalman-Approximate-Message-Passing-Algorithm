@@ -293,24 +293,43 @@ def main():
             optimal_params = best_params['nmse_global']  # Use best for NMSE as primary metric
             print(f"Optimal parameters for {data_type}: {optimal_params}")
 
-            # Save best parameters
-            best_params_file = f'best_hyperparams_{data_type}.json'
+            # Save best parameters immediately
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            best_params_file = f'{results_base_dir}/best_hyperparams_{data_type}_{timestamp}.json'
             with open(best_params_file, 'w') as f:
                 json.dump(best_params, f, indent=4)
             print(f"Best hyperparameters saved to {best_params_file}")
+
+            # Also save grid search results
+            grid_search_file = f'{results_base_dir}/grid_search_results_{data_type}_{timestamp}.json'
+            with open(grid_search_file, 'w') as f:
+                json.dump(results, f, indent=4)
+            print(f"Grid search results saved to {grid_search_file}")
         except Exception as e:
             logging.error(f"Error in grid search for {data_type}: {e}")
             print(f"Warning: Error in grid search for {data_type}: {e}")
             # Use default parameters if grid search fails
             optimal_params = {'alpha': 0.5, 'tau': 0.1, 'node_max_iter': 50, 'num_triggers': 100}
             print(f"Using default parameters: {optimal_params}")
-        plots_dir = f'distributed_kamp_plots_{data_type}'
+        # Create results directory structure
+        results_base_dir = f'experiments/results/distributed_kamp_topologies_{data_type}'
+        plots_dir = f'{results_base_dir}/plots'
+        intermediate_dir = f'{results_base_dir}/intermediate'
+        os.makedirs(results_base_dir, exist_ok=True)
         os.makedirs(plots_dir, exist_ok=True)
+        os.makedirs(intermediate_dir, exist_ok=True)
 
         results = []
 
         pbar = tqdm(adj_files, desc="Processing graphs")
         for i, adj_file in enumerate(pbar):
+            # Save current results every topology to prevent data loss
+            try:
+                current_results_file = f'{intermediate_dir}/current_results_{data_type}_topology_{i}.json'
+                with open(current_results_file, 'w') as f:
+                    json.dump(results, f, indent=4)
+            except Exception as e:
+                logging.error(f"Error saving current results at topology {i}: {e}")
             try:
                 pbar.set_description(f"Processing {os.path.basename(adj_file)}")
                 # Load adjacency matrix
@@ -466,38 +485,54 @@ def main():
                 'fit_time': fit_time
             }
             results.append(result)
+
+            # Save individual topology result immediately
+            try:
+                individual_result_file = f'{intermediate_dir}/topology_result_{os.path.basename(adj_file).replace(".txt", "")}_{data_type}.json'
+                with open(individual_result_file, 'w') as f:
+                    json.dump(result, f, indent=4)
+            except Exception as e:
+                logging.error(f"Error saving individual topology result for {adj_file}: {e}")
+
             pbar.set_postfix({
                 'NMSE': f"{nmse_global:.2f}",
                 'Consensus': f"{consensus_error:.2f}",
                 'Time': f"{fit_time:.2f}s"
             })
 
-            # Save intermediate results every 10 graphs
+            # Save intermediate results every 5 graphs (more frequent)
             try:
-                if (i + 1) % 10 == 0:
+                if (i + 1) % 5 == 0:
                     df_temp = pd.DataFrame(results)
-                    temp_file = f'distributed_kamp_results_{data_type}_intermediate_{i+1}.xlsx'
+                    timestamp = time.strftime("%Y%m%d_%H%M%S")
+                    temp_file = f'{intermediate_dir}/distributed_kamp_results_{data_type}_intermediate_{i+1}_{timestamp}.xlsx'
                     df_temp.to_excel(temp_file, index=False)
                     print(f"Intermediate results saved to {temp_file}")
+
+                    # Also save as JSON for backup
+                    json_temp_file = f'{intermediate_dir}/distributed_kamp_results_{data_type}_intermediate_{i+1}_{timestamp}.json'
+                    with open(json_temp_file, 'w') as f:
+                        json.dump(results, f, indent=4)
             except Exception as e:
                 logging.error(f"Error saving intermediate results at iteration {i+1}: {e}")
                 print(f"Warning: Error saving intermediate results at iteration {i+1}: {e}")
 
         pbar.close()
 
-        # Save results to Excel
+        # Save final results to Excel
         try:
             df = pd.DataFrame(results)
-            results_file = f'distributed_kamp_results_{data_type}.xlsx'
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            results_file = f'{results_base_dir}/distributed_kamp_results_{data_type}_final_{timestamp}.xlsx'
             df.to_excel(results_file, index=False)
-            print(f"Results for {data_type} saved to {results_file}")
+            print(f"Final results for {data_type} saved to {results_file}")
         except Exception as e:
             logging.error(f"Error saving Excel results for {data_type}: {e}")
             print(f"Warning: Error saving Excel results for {data_type}: {e}")
 
         # Also save to JSON for backup
         try:
-            json_file = f'distributed_kamp_results_{data_type}.json'
+            json_file = f'{results_base_dir}/distributed_kamp_results_{data_type}_final_{timestamp}.json'
             with open(json_file, 'w') as f:
                 json.dump(results, f, indent=4)
             print(f"JSON backup for {data_type} saved to {json_file}")
@@ -507,7 +542,7 @@ def main():
 
         # Save report using metrics.py log_results function
         try:
-            log_file = f'distributed_kamp_results_{data_type}.log'
+            log_file = f'{results_base_dir}/distributed_kamp_results_{data_type}.log'
             # Format results for log_results function (using NMSE instead of AUC-ROC for compressive sensing)
             formatted_results = {}
             for i, result in enumerate(results):
@@ -524,7 +559,7 @@ def main():
 
         # Save detailed comprehensive report
         try:
-            detailed_report_file = f'results/detailed_report_{data_type}.txt'
+            detailed_report_file = f'{results_base_dir}/detailed_report_{data_type}.txt'
             save_detailed_report(results, filepath=detailed_report_file, format_type='txt')
             print(f"Detailed text report for {data_type} saved to {detailed_report_file}")
         except Exception as e:
@@ -533,7 +568,7 @@ def main():
 
         # Save detailed report in CSV format
         try:
-            csv_report_file = f'results/detailed_report_{data_type}.csv'
+            csv_report_file = f'{results_base_dir}/detailed_report_{data_type}.csv'
             save_detailed_report(results, filepath=csv_report_file, format_type='csv')
             print(f"Detailed CSV report for {data_type} saved to {csv_report_file}")
         except Exception as e:
@@ -542,7 +577,7 @@ def main():
 
         # Save detailed report in JSON format
         try:
-            json_report_file = f'results/detailed_report_{data_type}.json'
+            json_report_file = f'{results_base_dir}/detailed_report_{data_type}.json'
             save_detailed_report(results, filepath=json_report_file, format_type='json')
             print(f"Detailed JSON report for {data_type} saved to {json_report_file}")
         except Exception as e:
@@ -551,12 +586,29 @@ def main():
 
         # Save experiment summary
         try:
-            summary_file = f'results/experiment_summary_{data_type}.txt'
+            summary_file = f'{results_base_dir}/experiment_summary_{data_type}.txt'
             save_experiment_summary(results, filepath=summary_file)
             print(f"Experiment summary for {data_type} saved to {summary_file}")
         except Exception as e:
             logging.error(f"Error saving experiment summary for {data_type}: {e}")
             print(f"Warning: Error saving experiment summary for {data_type}: {e}")
+
+        # Save quick overview summary
+        try:
+            overview_file = f'{results_base_dir}/overview_{data_type}.txt'
+            with open(overview_file, 'w') as f:
+                f.write(f"Distributed KAMP Topology Test - {data_type.upper()}\n")
+                f.write(f"Generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Data type: {data_type}\n")
+                f.write(f"Measurement matrix size: {A.shape}\n")
+                f.write(f"Number of topologies tested: {len(results)}\n")
+                f.write(f"Optimal parameters: {optimal_params}\n")
+                f.write(f"Results saved in: {results_base_dir}\n")
+                f.write(f"Total execution time: {time.time() - time.time()}\n")  # This would need to be calculated properly
+            print(f"Overview summary for {data_type} saved to {overview_file}")
+        except Exception as e:
+            logging.error(f"Error saving overview for {data_type}: {e}")
+            print(f"Warning: Error saving overview for {data_type}: {e}")
 
 if __name__ == "__main__":
     main()
