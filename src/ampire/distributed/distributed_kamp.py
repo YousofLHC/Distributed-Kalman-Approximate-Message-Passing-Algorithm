@@ -12,7 +12,7 @@ class DistributedKAMP(KAMP):
     Inherits from KAMP to reuse single-node functionality.
     """
     def __init__(self, alpha: float, tau: float, node_max_iter: Union[int, List[int]],
-                 num_triggers: int, graph: nx.DiGraph, A_list: List[np.ndarray],
+                 num_triggers: int, graph: MyGraph, A_list: List[np.ndarray],
                  y_list: List[np.ndarray], random_state: int = None, verbose: bool = False,
                  just_dag: bool = False):
         """
@@ -23,7 +23,7 @@ class DistributedKAMP(KAMP):
             tau: Threshold for soft thresholding.
             node_max_iter: Maximum iterations for each node's KAMP algorithm (int or list of ints).
             num_triggers: Number of random node triggers.
-            graph: nx.DiGraph representing the graph, determines number of nodes.
+            graph: MyGraph representing the graph, determines number of nodes.
             A_list: List of measurement matrices [A_1, ..., A_N].
             y_list: List of observation vectors [y_1, ..., y_N].
             random_state: Random seed for reproducibility.
@@ -163,12 +163,12 @@ class DistributedKAMP(KAMP):
         if topology == 'dag':
             graph = cls.create_dag(num_nodes, random_state=random_state)
         elif topology == 'cycle':
-            graph = nx.DiGraph()
+            graph = MyGraph()
             graph.add_nodes_from(range(num_nodes))
             for i in range(num_nodes):
                 graph.add_edge(i, (i + 1) % num_nodes)
         elif topology == 'selfloop':
-            graph = nx.DiGraph()
+            graph = MyGraph()
             graph.add_nodes_from(range(num_nodes))
             for i in range(num_nodes):
                 graph.add_edge(i, i)
@@ -208,7 +208,7 @@ class DistributedKAMP(KAMP):
         }
 
     @staticmethod
-    def create_dag(num_nodes: int, edge_prob: float = 0.3, random_state: int = None) -> nx.DiGraph:
+    def create_dag(num_nodes: int, edge_prob: float = 0.3, random_state: int = None) -> MyGraph:
         """
         Create a random DAG for distributed KAMP.
 
@@ -218,10 +218,10 @@ class DistributedKAMP(KAMP):
             random_state: Random seed for reproducibility.
 
         Returns:
-            nx.DiGraph: Directed acyclic graph.
+            MyGraph: Directed acyclic graph.
         """
         rng = np.random.RandomState(random_state)
-        G = nx.DiGraph()
+        G = MyGraph()
         G.add_nodes_from(range(num_nodes))
         for i in range(num_nodes):
             for j in range(i + 1, num_nodes):
