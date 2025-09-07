@@ -9,6 +9,8 @@ from ampire.distributed.distributed_kamp import DistributedKAMP
 from ampire.network.graph import MyGraph, Node
 from ampire.core.kamp import KAMP
 import yaml
+from tqdm import tqdm
+import matplotlib.pyplot as plt
 from ampire.network.topology_generators import (
     create_dag, create_directed_with_cycles, create_directed_with_cycles_and_loops,
     create_star_with_extra_edges, create_leafs_to_final_node, create_tree_with_leaf_connections,
@@ -57,20 +59,15 @@ def create_synthetic_data(num_nodes=5, n=10, m=20):
 def main():
     topologies = load_topologies('configs/topologies.yaml')
     node_counts = [5, 10, 15, 25, 30, 50, 60, 100, 150, 200]
-    max_num_nodes = max(node_counts)
-    n = 700  # dimension of the signal
+    n = 70  # dimension of the signal
     m = 5000  # number of samples per measurement
-    # generate synthetic data once for all topologies
-    A_list_full, y_list_full, x_true = create_synthetic_data(num_nodes=max_num_nodes, n=n, m=m)
     results = []
-    for topo in topologies:
-        for num_nodes in node_counts:
-            if num_nodes > m:
-                continue  # skip if more nodes than samples
-            # use the pre-generated synthetic data
-            A_list = A_list_full[:num_nodes]
-            y_list = y_list_full[:num_nodes]
-            # create graph using topology
+    for num_nodes in tqdm.tqdm(node_counts, desc="Processing node counts"):
+        print(f"\nProcessing {num_nodes} nodes...")
+        # generate synthetic data for this num_nodes
+        A_list, y_list, x_true = create_synthetic_data(num_nodes=num_nodes, n=n, m=m)
+        for topo in topologies:
+            print(f"  Topology: {topo['name']}")
             rng = np.random.RandomState(42)
             graph = get_graph(topo, num_nodes, rng)
             dkamp = DistributedKAMP(alpha=0.5, tau=0.1,
@@ -91,7 +88,6 @@ def main():
             figure_path = f"graphs/{topo['name']}_nodes{num_nodes}.png"
             Path('graphs').mkdir(exist_ok=True)
             dkamp.plot_graph(show=False)
-            import matplotlib.pyplot as plt
             plt.savefig(figure_path)
             # save adjacency matrix
             adj_path = f"adjacency/{topo['name']}_nodes{num_nodes}.npy"
@@ -99,6 +95,8 @@ def main():
             np.save(adj_path, graph.get_adjacency_matrix())
             # compute summary metrics
             report = dkamp.report()
+            print(f"    Consensus error: {report['consensus_error']}")
+            print(f"    Bytes: {report['bytes']}")
             results.append({
                 'topology': topo['name'],
                 'num_nodes': num_nodes,
@@ -111,6 +109,7 @@ def main():
     with open('best_topologies.json', 'w') as f:
         import json
         json.dump(best_three, f, indent=2)
+    print("\nBest topologies saved to best_topologies.json")
 
 if __name__ == "__main__":
     main()
