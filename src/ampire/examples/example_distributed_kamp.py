@@ -60,7 +60,7 @@ def main():
     topologies = load_topologies('configs/topologies.yaml')
     node_counts = [5, 10, 15, 25, 30, 50, 60, 100, 150, 200]
     n = 70  # dimension of the signal
-    m = 5000  # number of samples per measurement
+    m = 800  # number of samples per measurement
     results = []
     for num_nodes in tqdm(node_counts, desc="Processing node counts"):
         print(f"\nProcessing {num_nodes} nodes...")
