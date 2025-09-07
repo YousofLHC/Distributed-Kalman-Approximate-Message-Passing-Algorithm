@@ -40,12 +40,27 @@ generators = [
 
 # Different parameter sets to generate variety
 params_list = [
+    {'num_nodes': 5, 'edge_prob': 0.3},
+    {'num_nodes': 5, 'edge_prob': 0.5},
+    {'num_nodes': 5, 'edge_prob': 0.7},
     {'num_nodes': 10, 'edge_prob': 0.3},
+    {'num_nodes': 10, 'edge_prob': 0.5},
     {'num_nodes': 10, 'edge_prob': 0.7},
+    {'num_nodes': 15, 'edge_prob': 0.3},
     {'num_nodes': 15, 'edge_prob': 0.5},
-    {'num_nodes': 15, 'edge_prob': 0.9},
-    {'num_nodes': 20, 'edge_prob': 0.4},
-    {'num_nodes': 20, 'edge_prob': 0.8},
+    {'num_nodes': 15, 'edge_prob': 0.7},
+    {'num_nodes': 20, 'edge_prob': 0.3},
+    {'num_nodes': 20, 'edge_prob': 0.5},
+    {'num_nodes': 20, 'edge_prob': 0.7},
+    {'num_nodes': 25, 'edge_prob': 0.3},
+    {'num_nodes': 25, 'edge_prob': 0.5},
+    {'num_nodes': 25, 'edge_prob': 0.7},
+    {'num_nodes': 30, 'edge_prob': 0.3},
+    {'num_nodes': 30, 'edge_prob': 0.5},
+    {'num_nodes': 30, 'edge_prob': 0.7},
+    {'num_nodes': 35, 'edge_prob': 0.3},
+    {'num_nodes': 35, 'edge_prob': 0.5},
+    {'num_nodes': 35, 'edge_prob': 0.7},
 ]
 
 # Additional params for specific generators
@@ -76,11 +91,7 @@ for name, func in generators:
             plot_graph(G, title, plot_filename)
             save_adjacency_matrix(G, matrix_filename)
             graph_count += 1
-            if graph_count >= 20:
-                break
         except Exception as e:
             print(f"Error generating {name}: {e}")
-    if graph_count >= 20:
-        break
 
 print(f"Generated {graph_count} graphs. Plots and adjacency matrices saved in '{plots_dir}' directory.")
