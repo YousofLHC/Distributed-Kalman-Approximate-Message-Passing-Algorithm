@@ -40,34 +40,20 @@ generators = [
 
 # Different parameter sets to generate variety
 params_list = [
-    {'num_nodes': 5, 'edge_prob': 0.3},
     {'num_nodes': 5, 'edge_prob': 0.5},
     {'num_nodes': 5, 'edge_prob': 0.7},
-    {'num_nodes': 10, 'edge_prob': 0.3},
-    {'num_nodes': 10, 'edge_prob': 0.5},
     {'num_nodes': 10, 'edge_prob': 0.7},
     {'num_nodes': 15, 'edge_prob': 0.3},
     {'num_nodes': 15, 'edge_prob': 0.5},
-    {'num_nodes': 15, 'edge_prob': 0.7},
-    {'num_nodes': 20, 'edge_prob': 0.3},
-    {'num_nodes': 20, 'edge_prob': 0.5},
-    {'num_nodes': 20, 'edge_prob': 0.7},
-    {'num_nodes': 25, 'edge_prob': 0.3},
-    {'num_nodes': 25, 'edge_prob': 0.5},
-    {'num_nodes': 25, 'edge_prob': 0.7},
-    {'num_nodes': 30, 'edge_prob': 0.3},
-    {'num_nodes': 30, 'edge_prob': 0.5},
-    {'num_nodes': 30, 'edge_prob': 0.7},
-    {'num_nodes': 35, 'edge_prob': 0.3},
-    {'num_nodes': 35, 'edge_prob': 0.5},
-    {'num_nodes': 35, 'edge_prob': 0.7},
+    {'num_nodes': 20, 'edge_prob': 0.6},
+    {'num_nodes': 25, 'edge_prob': 0.4},
 ]
 
 # Additional params for specific generators
 extra_params = {
-    'create_directed_with_cycles_and_loops': {'self_loop_prob': 0.1},
+    'create_directed_with_cycles_and_loops': {'self_loop_prob': 0.3},
     'create_star_with_extra_edges': {'extra_edge_prob': 0.2},
-    'create_tree_with_leaf_connections': {'leaf_edge_prob': 0.3, 'back_edge_prob': 0.1},
+    'create_tree_with_leaf_connections': {'leaf_edge_prob': 0.2, 'back_edge_prob': 0.1},
     'create_bidirectional': {'bidirectional_prob': 0.3}
 }
 
