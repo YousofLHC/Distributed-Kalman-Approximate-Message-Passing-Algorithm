@@ -370,26 +370,65 @@ def main():
             # Plot original vs reconstructed
             try:
                 if is_2d:
-                    # Reshape to 2D for plotting
+                    # For 2D data: plot the signal vectors
                     x_est_2d = x_est.reshape(shape_2d)
                     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-                    axes[0].imshow(x_true_2d, cmap='viridis')
-                    axes[0].set_title('Original 2D Signal')
-                    axes[0].axis('off')
-                    axes[1].imshow(x_est_2d, cmap='viridis')
-                    axes[1].set_title('Reconstructed 2D Signal')
-                    axes[1].axis('off')
+                    axes[0].plot(x_true_flat, 'b-', label='Original', linewidth=2)
+                    axes[0].set_title('Original Signal')
+                    axes[0].set_xlabel('Feature Index')
+                    axes[0].set_ylabel('Signal Value')
+                    axes[0].grid(True, alpha=0.3)
+                    axes[1].plot(x_est, 'r-', label='Reconstructed', linewidth=2)
+                    axes[1].set_title('Reconstructed Signal')
+                    axes[1].set_xlabel('Feature Index')
+                    axes[1].set_ylabel('Signal Value')
+                    axes[1].grid(True, alpha=0.3)
                 else:
-                    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-                    axes[0].plot(x_true_flat, label='Original')
-                    axes[0].set_title('Original Complex Signal')
-                    axes[1].plot(x_est, label='Reconstructed')
-                    axes[1].set_title('Reconstructed Complex Signal')
+                    # For complex data: create comprehensive visualization
+                    fig = plt.figure(figsize=(15, 10))
+
+                    # Subplot 1: Measurement matrix A (900x70)
+                    plt.subplot(2, 2, 1)
+                    plt.imshow(A, aspect='auto', cmap='viridis')
+                    plt.title('Measurement Matrix A (900×70)')
+                    plt.xlabel('Features')
+                    plt.ylabel('Samples')
+                    plt.colorbar(label='Value')
+
+                    # Subplot 2: Observation vector y (900x1)
+                    plt.subplot(2, 2, 2)
+                    plt.plot(y, 'g-', linewidth=1)
+                    plt.title('Observation Vector y (900×1)')
+                    plt.xlabel('Sample Index')
+                    plt.ylabel('Observation Value')
+                    plt.grid(True, alpha=0.3)
+
+                    # Subplot 3: True vs Reconstructed signal (70x1)
+                    plt.subplot(2, 2, 3)
+                    plt.plot(x_true_flat, 'b-', label='True Signal', linewidth=2, alpha=0.8)
+                    plt.plot(x_est, 'r--', label='Reconstructed', linewidth=2, alpha=0.8)
+                    plt.title('Signal Comparison (70 features)')
+                    plt.xlabel('Feature Index')
+                    plt.ylabel('Signal Value')
+                    plt.legend()
+                    plt.grid(True, alpha=0.3)
+
+                    # Subplot 4: Reconstruction error
+                    plt.subplot(2, 2, 4)
+                    error = x_true_flat - x_est
+                    plt.plot(error, 'm-', linewidth=1.5)
+                    plt.axhline(y=0, color='k', linestyle='--', alpha=0.5)
+                    plt.title('Reconstruction Error')
+                    plt.xlabel('Feature Index')
+                    plt.ylabel('Error Value')
+                    plt.grid(True, alpha=0.3)
+
+                    plt.tight_layout()
 
                 nmse_placeholder = np.linalg.norm(x_est - x_true_flat)**2 / np.linalg.norm(x_true_flat)**2
-                plt.suptitle(f"{os.path.basename(adj_file)} - NMSE: {nmse_placeholder:.4f}")
+                plt.suptitle(f"{os.path.basename(adj_file)} - NMSE: {nmse_placeholder:.4f}", fontsize=14, y=0.98)
                 plot_file = os.path.join(plots_dir, f"{os.path.basename(adj_file).replace('.txt', '')}_reconstruction.png")
-                plt.savefig(plot_file)
+                plt.savefig(plot_file, dpi=150, bbox_inches='tight')
                 plt.close()
             except Exception as e:
                 logging.error(f"Error creating/saving plot for {adj_file}: {e}")
