@@ -153,6 +153,7 @@ def run_experiment():
                 for method in tqdm(methods, desc="Method", leave=False):
                     nmse_list = []
                     for trial in range(num_trials):
+                        # Create trial ID for tracking
                         trial_id = f"{method}_m{m}_n{n}_k{k}_mt_{matrix_type}_t{trial}"
                         try:
                             # Generate sparse signal as column vector (n,1)
@@ -181,7 +182,11 @@ def run_experiment():
                                 'matrix_type': matrix_type,
                                 'sparsity': sparsity,
                                 'measurement_rate': rate,
-                                'nmse': metrics.get('nmse', None)
+                                'nmse': metrics.get('nmse', None),
+                                "rmse": metrics['rmse'],
+                                "nmse": metrics['nmse'],
+                                "snr": metrics['snr'],
+                                "peak_snr": metrics['peak_snr']
                             }
                             # append to jsonl
                             with open(jsonl_path, 'a') as f:
