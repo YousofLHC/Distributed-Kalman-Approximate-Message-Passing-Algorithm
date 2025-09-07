@@ -34,7 +34,7 @@ def generate_synthetic_data(num_samples=900, num_features=70, sparsity=0.1, nois
     """
     Generate synthetic data for sparse signal recovery.
     If is_2d=True, generate 2D sparse data with shape_2d.
-    If is_2d=False, generate 1D sparse data with num_features.
+    If is_2d=False, generate Complex sparse data with num_features.
     """
     rng = np.random.RandomState(random_state)
     if is_2d:
@@ -45,7 +45,7 @@ def generate_synthetic_data(num_samples=900, num_features=70, sparsity=0.1, nois
         x_true_flat = x_true.flatten()
         num_features = x_true_flat.shape[0]
     else:
-        # 1D sparse signal (Complex data)
+        # Complex sparse signal (Complex data)
         x_true = rng.randn(num_features)
         mask = rng.rand(num_features) < sparsity
         x_true[~mask] = 0
