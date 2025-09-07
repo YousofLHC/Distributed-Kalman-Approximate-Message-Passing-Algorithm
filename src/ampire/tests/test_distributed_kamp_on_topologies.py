@@ -17,7 +17,7 @@ from ampire.network.graph import MyGraph
 from ampire.utils.metrics import (
     log_results, save_detailed_report, save_experiment_summary,
     calculate_compressive_sensing_metrics, calculate_ssim, calculate_gmsd,
-    calculate_fsim, calculate_vif
+    calculate_fsim, calculate_vif, safe_divide, DEFAULT_EPS
 )
 
 # Setup logging
@@ -442,7 +442,13 @@ def main():
 
                     plt.tight_layout()
 
-                nmse_placeholder = np.linalg.norm(x_est - x_true_flat)**2 / np.linalg.norm(x_true_flat)**2
+                # Safe NMSE calculation for plotting
+                mse_plot = np.mean((x_est - x_true_flat) ** 2)
+                signal_power_plot = np.var(x_true_flat)
+                if signal_power_plot == 0:
+                    nmse_placeholder = mse_plot if mse_plot > 0 else 0.0
+                else:
+                    nmse_placeholder = safe_divide(mse_plot, signal_power_plot, mode="epsilon", epsilon=DEFAULT_EPS, warn=False)
                 plt.suptitle(f"{os.path.basename(adj_file)} - NMSE: {nmse_placeholder:.4f}", fontsize=14, y=0.98)
                 plot_file = os.path.join(plots_dir, f"{os.path.basename(adj_file).replace('.txt', '')}_reconstruction.png")
                 plt.savefig(plot_file, dpi=150, bbox_inches='tight')
@@ -453,13 +459,33 @@ def main():
 
             # Compute metrics
             try:
-                nmse_global = np.linalg.norm(x_est - x_true_flat)**2 / np.linalg.norm(x_true_flat)**2
-                nmse_per_node = [np.linalg.norm(x - x_true_flat)**2 / np.linalg.norm(x_true_flat)**2 for x in node_estimates]
+                # Safe NMSE calculations
+                mse_global = np.mean((x_est - x_true_flat) ** 2)
+                signal_power_global = np.var(x_true_flat)
+
+                if signal_power_global == 0:
+                    nmse_global = mse_global if mse_global > 0 else 0.0
+                else:
+                    nmse_global = safe_divide(mse_global, signal_power_global, mode="epsilon", epsilon=DEFAULT_EPS, warn=False)
+
+                # Safe per-node NMSE calculations
+                nmse_per_node = []
+                for x in node_estimates:
+                    mse_node = np.mean((x - x_true_flat) ** 2)
+                    if signal_power_global == 0:
+                        nmse_node = mse_node if mse_node > 0 else 0.0
+                    else:
+                        nmse_node = safe_divide(mse_node, signal_power_global, mode="epsilon", epsilon=DEFAULT_EPS, warn=False)
+                    nmse_per_node.append(nmse_node)
+
                 mean_nmse_per_node = np.mean(nmse_per_node)
                 std_nmse_per_node = np.std(nmse_per_node)
 
-                # Consensus error (variance of norms)
-                consensus_error = np.var([np.linalg.norm(x - x_est) for x in node_estimates])
+                # Consensus error (variance of norms) - handle potential NaN in node estimates
+                try:
+                    consensus_error = np.var([np.linalg.norm(x - x_est) for x in node_estimates])
+                except:
+                    consensus_error = np.nan
 
                 # Get report
                 report = dk.report()
