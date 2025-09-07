@@ -12,7 +12,7 @@ from sklearn.metrics import (
 
 ZeroDivMode = Literal["epsilon", "zero", "nan", "raise"]
 DEFAULT_ZERO_DIVISION_CLASSIF: ZeroDivMode = "zero"
-DEFAULT_ZERO_DIVISION_RECON: ZeroDivMode = "nan"
+DEFAULT_ZERO_DIVISION_RECON: ZeroDivMode = "epsilon"
 DEFAULT_EPS = 1e-12
 
 
@@ -207,21 +207,35 @@ def calculate_compressive_sensing_metrics(y_true: np.ndarray, y_pred: np.ndarray
     """
     mse = np.mean((y_true - y_pred) ** 2)
     rmse = np.sqrt(mse)
-    nmse = safe_divide(mse, np.var(y_true), mode=DEFAULT_ZERO_DIVISION_RECON)
+
+    # NMSE: Normalized Mean Squared Error
+    signal_power = np.var(y_true)
+    if signal_power == 0:
+        # Constant signal - NMSE is undefined, use MSE instead
+        nmse = mse if mse > 0 else 0.0
+    else:
+        nmse = safe_divide(mse, signal_power, mode="epsilon", epsilon=DEFAULT_EPS, warn=False)
 
     # SNR: Signal-to-Noise Ratio
     if mse == 0:
         snr = float('inf')
     else:
         mse_clamped = max(mse, DEFAULT_EPS)
-        snr = 10 * np.log10(safe_divide(np.var(y_true), mse_clamped, mode=DEFAULT_ZERO_DIVISION_RECON))
+        signal_power = max(np.var(y_true), DEFAULT_EPS)  # Ensure non-zero for log
+        snr_ratio = safe_divide(signal_power, mse_clamped, mode="epsilon", epsilon=DEFAULT_EPS, warn=False)
+        snr = 10 * np.log10(max(snr_ratio, DEFAULT_EPS))  # Ensure positive for log
 
     # Peak SNR (PSNR)
     if mse == 0:
         peak_snr = float('inf')
     else:
         mse_clamped = max(mse, DEFAULT_EPS)
-        peak_snr = 20 * np.log10(safe_divide(np.max(np.abs(y_true))**2, mse_clamped, mode=DEFAULT_ZERO_DIVISION_RECON))
+        peak_power = np.max(np.abs(y_true))**2
+        if peak_power == 0:
+            peak_snr = 0.0  # Zero signal
+        else:
+            psnr_ratio = safe_divide(peak_power, mse_clamped, mode="epsilon", epsilon=DEFAULT_EPS, warn=False)
+            peak_snr = 20 * np.log10(max(psnr_ratio, DEFAULT_EPS))  # Ensure positive for log
 
     return {'mse': mse, 'rmse': rmse, 'nmse': nmse, 'snr': snr, 'peak_snr': peak_snr}
 
