@@ -57,14 +57,19 @@ def create_synthetic_data(num_nodes=5, n=10, m=20):
 def main():
     topologies = load_topologies('configs/topologies.yaml')
     node_counts = [5, 10, 15, 25, 30, 50, 60, 100, 150, 200]
+    max_num_nodes = max(node_counts)
+    n = 700  # dimension of the signal
+    m = 5000  # number of samples per measurement
+    # generate synthetic data once for all topologies
+    A_list_full, y_list_full, x_true = create_synthetic_data(num_nodes=max_num_nodes, n=n, m=m)
     results = []
     for topo in topologies:
         for num_nodes in node_counts:
-            m = 200  # number of samples per measurement; adjust as needed
             if num_nodes > m:
                 continue  # skip if more nodes than samples
-            # generate synthetic data with m samples
-            A_list, y_list, x_true = create_synthetic_data(num_nodes=num_nodes, n=10, m=m)
+            # use the pre-generated synthetic data
+            A_list = A_list_full[:num_nodes]
+            y_list = y_list_full[:num_nodes]
             # create graph using topology
             rng = np.random.RandomState(42)
             graph = get_graph(topo, num_nodes, rng)
