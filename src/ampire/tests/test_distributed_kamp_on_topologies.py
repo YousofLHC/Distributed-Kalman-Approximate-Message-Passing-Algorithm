@@ -258,76 +258,84 @@ def main():
         print(f"Warning: Error loading first topology for grid search: {e}")
         return
 
+    # Define sparsity levels to test (10%, 35%, 90% non-zero elements)
+    sparsity_levels = [0.1, 0.35, 0.9]  # 10%, 35%, 90% non-zero elements
+
     # Loop over 2D and Complex data
     for is_2d in [False, True]:
         # Define data_type early to avoid UnboundLocalError in exception handlers
         data_type = '2d' if is_2d else 'Complex'
 
-        print(f"\n{'='*50}")
-        print(f"Testing with {'2D' if is_2d else 'Complex'} synthetic data")
-        print(f"{'='*50}")
+        # Loop over different sparsity levels
+        for sparsity in sparsity_levels:
+            sparsity_percent = int(sparsity * 100)
+            print(f"\n{'='*60}")
+            print(f"Testing with {'2D' if is_2d else 'Complex'} synthetic data - {sparsity_percent}% non-zero elements")
+            print(f"{'='*60}")
 
-        # Create results directory structure BEFORE grid search
-        results_base_dir = f'experiments/results/distributed_kamp_topologies_{data_type}'
-        plots_dir = f'{results_base_dir}/plots'
-        intermediate_dir = f'{results_base_dir}/intermediate'
-        os.makedirs(results_base_dir, exist_ok=True)
-        os.makedirs(plots_dir, exist_ok=True)
-        os.makedirs(intermediate_dir, exist_ok=True)
+            # Create results directory structure BEFORE grid search
+            results_base_dir = f'experiments/results/distributed_kamp_topologies_{data_type}_sparsity_{sparsity_percent}'
+            plots_dir = f'{results_base_dir}/plots'
+            intermediate_dir = f'{results_base_dir}/intermediate'
+            os.makedirs(results_base_dir, exist_ok=True)
+            os.makedirs(plots_dir, exist_ok=True)
+            os.makedirs(intermediate_dir, exist_ok=True)
 
-        try:
-            num_samples = 900
-            if is_2d:
-                num_features = 2
-                shape_2d = (1, num_features)  # This creates 2D signal but measurement matrix is 900×2
-                A, y, x_true_flat, x_true_2d = generate_synthetic_data(num_samples=num_samples, num_features=num_features, is_2d=is_2d, shape_2d=shape_2d)
-                print(f"Generated 2D synthetic data: {A.shape[0]} samples, {A.shape[1]} features (measurement matrix {A.shape[0]}×{A.shape[1]})")
-            else:
-                num_features = 70
-                A, y, x_true_flat, x_true_2d = generate_synthetic_data(num_samples=num_samples, num_features=num_features, is_2d=is_2d)
-                print(f"Generated Complex synthetic data: {A.shape[0]} samples, {A.shape[1]} features (measurement matrix {A.shape[0]}×{A.shape[1]})")
-        except Exception as e:
-            logging.error(f"Error generating synthetic data for {data_type}: {e}")
-            print(f"Warning: Error generating synthetic data for {data_type}: {e}")
-            continue
+            try:
+                num_samples = 900
+                if is_2d:
+                    num_features = 2
+                    shape_2d = (1, num_features)  # This creates 2D signal but measurement matrix is 900×2
+                    A, y, x_true_flat, x_true_2d = generate_synthetic_data(num_samples=num_samples, num_features=num_features, sparsity=sparsity, is_2d=is_2d, shape_2d=shape_2d)
+                    print(f"Generated 2D synthetic data: {A.shape[0]} samples, {A.shape[1]} features (measurement matrix {A.shape[0]}×{A.shape[1]})")
+                else:
+                    num_features = 70
+                    A, y, x_true_flat, x_true_2d = generate_synthetic_data(num_samples=num_samples, num_features=num_features, sparsity=sparsity, is_2d=is_2d)
+                    print(f"Generated Complex synthetic data: {A.shape[0]} samples, {A.shape[1]} features (measurement matrix {A.shape[0]}×{A.shape[1]})")
+            except Exception as e:
+                logging.error(f"Error generating synthetic data for {data_type} with {sparsity_percent}% sparsity: {e}")
+                print(f"Warning: Error generating synthetic data for {data_type} with {sparsity_percent}% sparsity: {e}")
+                continue
 
-        num_samples, num_features = A.shape
-        print(f"True signal sparsity: {np.sum(x_true_flat != 0)} non-zero elements")
+            num_samples, num_features = A.shape
+            non_zero_count = np.sum(x_true_flat != 0)
+            sparsity_actual = non_zero_count / len(x_true_flat)
+            print(f"True signal sparsity: {non_zero_count} non-zero elements ({sparsity_actual:.1%})")
 
-        # Perform grid search for hyperparameter optimization
-        try:
-            print(f"Performing grid search for {data_type} data...")
-            best_params = grid_search_hyperparameters(A, y, x_true_flat, first_G, param_grids, is_2d=is_2d, x_true_2d=x_true_2d, random_state=42)
-            optimal_params = best_params['nmse_global']  # Use best for NMSE as primary metric
-            print(f"Optimal parameters for {data_type}: {optimal_params}")
+            # Perform grid search for hyperparameter optimization
+            try:
+                print(f"Performing grid search for {data_type} data with {sparsity_percent}% sparsity...")
+                best_params = grid_search_hyperparameters(A, y, x_true_flat, first_G, param_grids, is_2d=is_2d, x_true_2d=x_true_2d, random_state=42)
+                optimal_params = best_params['nmse_global']  # Use best for NMSE as primary metric
+                print(f"Optimal parameters for {data_type} with {sparsity_percent}% sparsity: {optimal_params}")
 
-            # Save best parameters immediately
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            best_params_file = f'{results_base_dir}/best_hyperparams_{data_type}_{timestamp}.json'
-            with open(best_params_file, 'w') as f:
-                json.dump(best_params, f, indent=4)
-            print(f"Best hyperparameters saved to {best_params_file}")
+                # Save best parameters immediately
+                timestamp = time.strftime("%Y%m%d_%H%M%S")
+                best_params_file = f'{results_base_dir}/best_hyperparams_{data_type}_sparsity_{sparsity_percent}_{timestamp}.json'
+                with open(best_params_file, 'w') as f:
+                    json.dump(best_params, f, indent=4)
+                print(f"Best hyperparameters saved to {best_params_file}")
 
-            # Also save grid search results
-            grid_search_file = f'{results_base_dir}/grid_search_results_{data_type}_{timestamp}.json'
-            with open(grid_search_file, 'w') as f:
-                json.dump(results, f, indent=4)
-            print(f"Grid search results saved to {grid_search_file}")
-        except Exception as e:
-            logging.error(f"Error in grid search for {data_type}: {e}")
-            print(f"Warning: Error in grid search for {data_type}: {e}")
-            # Use default parameters if grid search fails
-            optimal_params = {'alpha': 0.5, 'tau': 0.1, 'node_max_iter': 50, 'num_triggers': 100}
-            print(f"Using default parameters: {optimal_params}")
+                # Also save grid search results
+                grid_search_file = f'{results_base_dir}/grid_search_results_{data_type}_sparsity_{sparsity_percent}_{timestamp}.json'
+                with open(grid_search_file, 'w') as f:
+                    json.dump(results, f, indent=4)
+                print(f"Grid search results saved to {grid_search_file}")
+            except Exception as e:
+                logging.error(f"Error in grid search for {data_type} with {sparsity_percent}% sparsity: {e}")
+                print(f"Warning: Error in grid search for {data_type} with {sparsity_percent}% sparsity: {e}")
+                # Use default parameters if grid search fails
+                optimal_params = {'alpha': 0.5, 'tau': 0.1, 'node_max_iter': 50, 'num_triggers': 100}
+                print(f"Using default parameters: {optimal_params}")
 
-        # Initialize results list BEFORE grid search
-        results = []
+            # Initialize results list BEFORE grid search
+            results = []
 
         pbar = tqdm(adj_files, desc="Processing graphs")
         for i, adj_file in enumerate(pbar):
             # Save current results every topology to prevent data loss
             try:
-                current_results_file = f'{intermediate_dir}/current_results_{data_type}_topology_{i}.json'
+                current_results_file = f'{intermediate_dir}/current_results_{data_type}_sparsity_{sparsity_percent}_topology_{i}.json'
                 with open(current_results_file, 'w') as f:
                     json.dump(results, f, indent=4)
             except Exception as e:
@@ -338,12 +346,14 @@ def main():
                 if (i + 1) % 2 == 0:
                     progress_summary = {
                         'data_type': data_type,
+                        'sparsity_level': sparsity,
+                        'sparsity_percent': sparsity_percent,
                         'current_topology': i + 1,
                         'total_topologies': len(adj_files),
                         'results_so_far': len(results),
                         'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
                     }
-                    progress_file = f'{intermediate_dir}/progress_{data_type}_topology_{i+1}.json'
+                    progress_file = f'{intermediate_dir}/progress_{data_type}_sparsity_{sparsity_percent}_topology_{i+1}.json'
                     with open(progress_file, 'w') as f:
                         json.dump(progress_summary, f, indent=4)
             except Exception as e:
@@ -407,13 +417,15 @@ def main():
                     execution_result = {
                         'topology': os.path.basename(adj_file),
                         'data_type': data_type,
+                        'sparsity_level': sparsity,
+                        'sparsity_percent': sparsity_percent,
                         'num_nodes': num_nodes,
                         'fit_time': fit_time,
                         'x_est_shape': x_est.shape if x_est is not None else None,
                         'node_estimates_count': len(node_estimates),
                         'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
                     }
-                    execution_file = f'{intermediate_dir}/execution_result_{os.path.basename(adj_file).replace(".txt", "")}_{data_type}.json'
+                    execution_file = f'{intermediate_dir}/execution_result_{os.path.basename(adj_file).replace(".txt", "")}_{data_type}_sparsity_{sparsity_percent}.json'
                     with open(execution_file, 'w') as f:
                         json.dump(execution_result, f, indent=4)
                 except Exception as e:
@@ -496,13 +508,15 @@ def main():
                     plot_metadata = {
                         'topology': os.path.basename(adj_file),
                         'data_type': data_type,
+                        'sparsity_level': sparsity,
+                        'sparsity_percent': sparsity_percent,
                         'plot_type': 'imshow' if num_features >= 10 and x_true_2d is not None else 'line_plot',
                         'num_features': num_features,
                         'nmse_value': nmse_placeholder,
                         'plot_file': plot_file,
                         'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
                     }
-                    metadata_file = f'{intermediate_dir}/plot_metadata_{os.path.basename(adj_file).replace(".txt", "")}_{data_type}.json'
+                    metadata_file = f'{intermediate_dir}/plot_metadata_{os.path.basename(adj_file).replace(".txt", "")}_{data_type}_sparsity_{sparsity_percent}.json'
                     with open(metadata_file, 'w') as f:
                         json.dump(plot_metadata, f, indent=4)
                 except Exception as e:
@@ -550,6 +564,8 @@ def main():
                     metrics_result = {
                         'topology': os.path.basename(adj_file),
                         'data_type': data_type,
+                        'sparsity_level': sparsity,
+                        'sparsity_percent': sparsity_percent,
                         'nmse_global': nmse_global,
                         'mean_nmse_per_node': mean_nmse_per_node,
                         'std_nmse_per_node': std_nmse_per_node,
@@ -559,7 +575,7 @@ def main():
                         'fit_time': fit_time,
                         'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
                     }
-                    metrics_file = f'{intermediate_dir}/metrics_result_{os.path.basename(adj_file).replace(".txt", "")}_{data_type}.json'
+                    metrics_file = f'{intermediate_dir}/metrics_result_{os.path.basename(adj_file).replace(".txt", "")}_{data_type}_sparsity_{sparsity_percent}.json'
                     with open(metrics_file, 'w') as f:
                         json.dump(metrics_result, f, indent=4)
                 except Exception as e:
@@ -573,6 +589,8 @@ def main():
 
             result = {
                 'data_type': data_type,
+                'sparsity_level': sparsity,
+                'sparsity_percent': sparsity_percent,
                 'graph_file': os.path.basename(adj_file),
                 'num_nodes': num_nodes,
                 'num_edges': num_edges,
@@ -590,7 +608,7 @@ def main():
 
             # Save individual topology result immediately
             try:
-                individual_result_file = f'{intermediate_dir}/topology_result_{os.path.basename(adj_file).replace(".txt", "")}_{data_type}.json'
+                individual_result_file = f'{intermediate_dir}/topology_result_{os.path.basename(adj_file).replace(".txt", "")}_{data_type}_sparsity_{sparsity_percent}.json'
                 with open(individual_result_file, 'w') as f:
                     json.dump(result, f, indent=4)
             except Exception as e:
@@ -607,12 +625,12 @@ def main():
                 if (i + 1) % 5 == 0:
                     df_temp = pd.DataFrame(results)
                     timestamp = time.strftime("%Y%m%d_%H%M%S")
-                    temp_file = f'{intermediate_dir}/distributed_kamp_results_{data_type}_intermediate_{i+1}_{timestamp}.xlsx'
+                    temp_file = f'{intermediate_dir}/distributed_kamp_results_{data_type}_sparsity_{sparsity_percent}_intermediate_{i+1}_{timestamp}.xlsx'
                     df_temp.to_excel(temp_file, index=False)
-                    print(f"Intermediate results saved to {temp_file}")
+                    print(f"Intermediate results for {sparsity_percent}% sparsity saved to {temp_file}")
 
                     # Also save as JSON for backup
-                    json_temp_file = f'{intermediate_dir}/distributed_kamp_results_{data_type}_intermediate_{i+1}_{timestamp}.json'
+                    json_temp_file = f'{intermediate_dir}/distributed_kamp_results_{data_type}_sparsity_{sparsity_percent}_intermediate_{i+1}_{timestamp}.json'
                     with open(json_temp_file, 'w') as f:
                         json.dump(results, f, indent=4)
             except Exception as e:
@@ -625,92 +643,93 @@ def main():
         try:
             df = pd.DataFrame(results)
             timestamp = time.strftime("%Y%m%d_%H%M%S")
-            results_file = f'{results_base_dir}/distributed_kamp_results_{data_type}_final_{timestamp}.xlsx'
+            results_file = f'{results_base_dir}/distributed_kamp_results_{data_type}_sparsity_{sparsity_percent}_final_{timestamp}.xlsx'
             df.to_excel(results_file, index=False)
-            print(f"Final results for {data_type} saved to {results_file}")
+            print(f"Final results for {data_type} with {sparsity_percent}% sparsity saved to {results_file}")
         except Exception as e:
-            logging.error(f"Error saving Excel results for {data_type}: {e}")
-            print(f"Warning: Error saving Excel results for {data_type}: {e}")
+            logging.error(f"Error saving Excel results for {data_type} with {sparsity_percent}% sparsity: {e}")
+            print(f"Warning: Error saving Excel results for {data_type} with {sparsity_percent}% sparsity: {e}")
 
         # Also save to JSON for backup
         try:
-            json_file = f'{results_base_dir}/distributed_kamp_results_{data_type}_final_{timestamp}.json'
+            json_file = f'{results_base_dir}/distributed_kamp_results_{data_type}_sparsity_{sparsity_percent}_final_{timestamp}.json'
             with open(json_file, 'w') as f:
                 json.dump(results, f, indent=4)
-            print(f"JSON backup for {data_type} saved to {json_file}")
+            print(f"JSON backup for {data_type} with {sparsity_percent}% sparsity saved to {json_file}")
         except Exception as e:
-            logging.error(f"Error saving JSON results for {data_type}: {e}")
-            print(f"Warning: Error saving JSON results for {data_type}: {e}")
+            logging.error(f"Error saving JSON results for {data_type} with {sparsity_percent}% sparsity: {e}")
+            print(f"Warning: Error saving JSON results for {data_type} with {sparsity_percent}% sparsity: {e}")
 
         # Save report using metrics.py log_results function
         try:
-            log_file = f'{results_base_dir}/distributed_kamp_results_{data_type}.log'
+            log_file = f'{results_base_dir}/distributed_kamp_results_{data_type}_sparsity_{sparsity_percent}.log'
             # Format results for log_results function (using NMSE instead of AUC-ROC for compressive sensing)
             formatted_results = {}
             for i, result in enumerate(results):
-                method_name = f"{result['graph_file']}_nodes{result['num_nodes']}"
+                method_name = f"{result['graph_file']}_nodes{result['num_nodes']}_sparsity{sparsity_percent}"
                 formatted_results[method_name] = {
                     'auc_roc': result.get('nmse_global', 0),  # Using NMSE as primary metric
                     'time': result.get('fit_time', 0)
                 }
             log_results(formatted_results, filepath=log_file)
-            print(f"Log report for {data_type} saved to {log_file}")
+            print(f"Log report for {data_type} with {sparsity_percent}% sparsity saved to {log_file}")
         except Exception as e:
-            logging.error(f"Error saving log report for {data_type}: {e}")
-            print(f"Warning: Error saving log report for {data_type}: {e}")
+            logging.error(f"Error saving log report for {data_type} with {sparsity_percent}% sparsity: {e}")
+            print(f"Warning: Error saving log report for {data_type} with {sparsity_percent}% sparsity: {e}")
 
         # Save detailed comprehensive report
         try:
-            detailed_report_file = f'{results_base_dir}/detailed_report_{data_type}.txt'
+            detailed_report_file = f'{results_base_dir}/detailed_report_{data_type}_sparsity_{sparsity_percent}.txt'
             save_detailed_report(results, filepath=detailed_report_file, format_type='txt')
-            print(f"Detailed text report for {data_type} saved to {detailed_report_file}")
+            print(f"Detailed text report for {data_type} with {sparsity_percent}% sparsity saved to {detailed_report_file}")
         except Exception as e:
-            logging.error(f"Error saving detailed text report for {data_type}: {e}")
-            print(f"Warning: Error saving detailed text report for {data_type}: {e}")
+            logging.error(f"Error saving detailed text report for {data_type} with {sparsity_percent}% sparsity: {e}")
+            print(f"Warning: Error saving detailed text report for {data_type} with {sparsity_percent}% sparsity: {e}")
 
         # Save detailed report in CSV format
         try:
-            csv_report_file = f'{results_base_dir}/detailed_report_{data_type}.csv'
+            csv_report_file = f'{results_base_dir}/detailed_report_{data_type}_sparsity_{sparsity_percent}.csv'
             save_detailed_report(results, filepath=csv_report_file, format_type='csv')
-            print(f"Detailed CSV report for {data_type} saved to {csv_report_file}")
+            print(f"Detailed CSV report for {data_type} with {sparsity_percent}% sparsity saved to {csv_report_file}")
         except Exception as e:
-            logging.error(f"Error saving detailed CSV report for {data_type}: {e}")
-            print(f"Warning: Error saving detailed CSV report for {data_type}: {e}")
+            logging.error(f"Error saving detailed CSV report for {data_type} with {sparsity_percent}% sparsity: {e}")
+            print(f"Warning: Error saving detailed CSV report for {data_type} with {sparsity_percent}% sparsity: {e}")
 
         # Save detailed report in JSON format
         try:
-            json_report_file = f'{results_base_dir}/detailed_report_{data_type}.json'
+            json_report_file = f'{results_base_dir}/detailed_report_{data_type}_sparsity_{sparsity_percent}.json'
             save_detailed_report(results, filepath=json_report_file, format_type='json')
-            print(f"Detailed JSON report for {data_type} saved to {json_report_file}")
+            print(f"Detailed JSON report for {data_type} with {sparsity_percent}% sparsity saved to {json_report_file}")
         except Exception as e:
-            logging.error(f"Error saving detailed JSON report for {data_type}: {e}")
-            print(f"Warning: Error saving detailed JSON report for {data_type}: {e}")
+            logging.error(f"Error saving detailed JSON report for {data_type} with {sparsity_percent}% sparsity: {e}")
+            print(f"Warning: Error saving detailed JSON report for {data_type} with {sparsity_percent}% sparsity: {e}")
 
         # Save experiment summary
         try:
-            summary_file = f'{results_base_dir}/experiment_summary_{data_type}.txt'
+            summary_file = f'{results_base_dir}/experiment_summary_{data_type}_sparsity_{sparsity_percent}.txt'
             save_experiment_summary(results, filepath=summary_file)
-            print(f"Experiment summary for {data_type} saved to {summary_file}")
+            print(f"Experiment summary for {data_type} with {sparsity_percent}% sparsity saved to {summary_file}")
         except Exception as e:
-            logging.error(f"Error saving experiment summary for {data_type}: {e}")
-            print(f"Warning: Error saving experiment summary for {data_type}: {e}")
+            logging.error(f"Error saving experiment summary for {data_type} with {sparsity_percent}% sparsity: {e}")
+            print(f"Warning: Error saving experiment summary for {data_type} with {sparsity_percent}% sparsity: {e}")
 
         # Save quick overview summary
         try:
-            overview_file = f'{results_base_dir}/overview_{data_type}.txt'
+            overview_file = f'{results_base_dir}/overview_{data_type}_sparsity_{sparsity_percent}.txt'
             with open(overview_file, 'w') as f:
-                f.write(f"Distributed KAMP Topology Test - {data_type.upper()}\n")
+                f.write(f"Distributed KAMP Topology Test - {data_type.upper()} with {sparsity_percent}% Sparsity\n")
                 f.write(f"Generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write(f"Data type: {data_type}\n")
+                f.write(f"Sparsity level: {sparsity} ({sparsity_percent}% non-zero elements)\n")
                 f.write(f"Measurement matrix size: {A.shape}\n")
                 f.write(f"Number of topologies tested: {len(results)}\n")
                 f.write(f"Optimal parameters: {optimal_params}\n")
                 f.write(f"Results saved in: {results_base_dir}\n")
                 f.write(f"Total execution time: {time.time() - time.time()}\n")  # This would need to be calculated properly
-            print(f"Overview summary for {data_type} saved to {overview_file}")
+            print(f"Overview summary for {data_type} with {sparsity_percent}% sparsity saved to {overview_file}")
         except Exception as e:
-            logging.error(f"Error saving overview for {data_type}: {e}")
-            print(f"Warning: Error saving overview for {data_type}: {e}")
+            logging.error(f"Error saving overview for {data_type} with {sparsity_percent}% sparsity: {e}")
+            print(f"Warning: Error saving overview for {data_type} with {sparsity_percent}% sparsity: {e}")
 
 if __name__ == "__main__":
     main()
