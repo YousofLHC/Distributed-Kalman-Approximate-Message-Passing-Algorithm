@@ -12,6 +12,7 @@ from tqdm import tqdm
 sys.path.insert(0, 'src')
 from ampire.distributed.distributed_kamp import DistributedKAMP
 from ampire.network.graph import MyGraph
+from ampire.utils.metrics import log_results, save_detailed_report, save_experiment_summary
 
 def generate_synthetic_data(num_samples=900, num_features=70, sparsity=0.1, noise_std=0.1, random_state=42, is_2d=False, shape_2d=(10, 7)):
     """
@@ -59,7 +60,7 @@ def main():
     print(f"Found {len(adj_files)} adjacency files")
 
     # Loop over Complex and 2D data
-    for is_2d in [False, True]:
+    for is_2d in [True, False]:
         print(f"\n{'='*50}")
         print(f"Testing with {'2D' if is_2d else 'Complex'} synthetic data")
         print(f"{'='*50}")
@@ -79,7 +80,7 @@ def main():
         print(f"True signal sparsity: {np.sum(x_true_flat != 0)} non-zero elements")
 
         # Create directory for plots
-        data_type = '2d' if is_2d else '1d'
+        data_type = '2d' if is_2d else 'Complex'
         plots_dir = f'distributed_kamp_plots_{data_type}'
         os.makedirs(plots_dir, exist_ok=True)
 
@@ -213,6 +214,39 @@ def main():
         with open(json_file, 'w') as f:
             json.dump(results, f, indent=4)
         print(f"JSON backup for {data_type} saved to {json_file}")
+
+        # Save report using metrics.py log_results function
+        log_file = f'distributed_kamp_results_{data_type}.log'
+        # Format results for log_results function (using NMSE instead of AUC-ROC for compressive sensing)
+        formatted_results = {}
+        for i, result in enumerate(results):
+            method_name = f"{result['graph_file']}_nodes{result['num_nodes']}"
+            formatted_results[method_name] = {
+                'auc_roc': result.get('nmse_global', 0),  # Using NMSE as primary metric
+                'time': result.get('fit_time', 0)
+            }
+        log_results(formatted_results, filepath=log_file)
+        print(f"Log report for {data_type} saved to {log_file}")
+
+        # Save detailed comprehensive report
+        detailed_report_file = f'results/detailed_report_{data_type}.txt'
+        save_detailed_report(results, filepath=detailed_report_file, format_type='txt')
+        print(f"Detailed text report for {data_type} saved to {detailed_report_file}")
+
+        # Save detailed report in CSV format
+        csv_report_file = f'results/detailed_report_{data_type}.csv'
+        save_detailed_report(results, filepath=csv_report_file, format_type='csv')
+        print(f"Detailed CSV report for {data_type} saved to {csv_report_file}")
+
+        # Save detailed report in JSON format
+        json_report_file = f'results/detailed_report_{data_type}.json'
+        save_detailed_report(results, filepath=json_report_file, format_type='json')
+        print(f"Detailed JSON report for {data_type} saved to {json_report_file}")
+
+        # Save experiment summary
+        summary_file = f'results/experiment_summary_{data_type}.txt'
+        save_experiment_summary(results, filepath=summary_file)
+        print(f"Experiment summary for {data_type} saved to {summary_file}")
 
 if __name__ == "__main__":
     main()

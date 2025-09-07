@@ -447,9 +447,215 @@ def track_convergence(iterations: int, runtime: float, tolerance: float = None, 
 def log_results(results, filepath='results/logs/experiment_log.txt'):
     import time
     import os
-    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    if os.path.dirname(filepath):
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
     with open(filepath, 'a') as f:
         f.write(f"Timestamp: {time.ctime()}\n")
         for method, metrics in results.items():
             f.write(f"{method}: AUC-ROC = {metrics['auc_roc']:.4f}, Time = {metrics['time']:.2f}s\n")
         f.write("-" * 50 + "\n")
+
+
+def save_detailed_report(results, filepath='results/detailed_report.txt', format_type='txt'):
+    """
+    Save detailed comprehensive report of experimental results.
+
+    Parameters
+    ----------
+    results : list
+        List of result dictionaries from experiments
+    filepath : str
+        Path to save the report
+    format_type : str
+        Format type: 'txt', 'csv', or 'json'
+    """
+    import time
+    import os
+    import json
+    import csv
+
+    if os.path.dirname(filepath):
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+    if format_type == 'txt':
+        with open(filepath, 'w') as f:
+            f.write("=" * 80 + "\n")
+            f.write("DISTRIBUTED KALMAN APPROXIMATE MESSAGE PASSING - DETAILED REPORT\n")
+            f.write("=" * 80 + "\n")
+            f.write(f"Generated: {time.ctime()}\n")
+            f.write(f"Total Experiments: {len(results)}\n\n")
+
+            # Summary statistics
+            if results:
+                data_types = set(r.get('data_type', 'Unknown') for r in results)
+                f.write("DATA TYPES PROCESSED:\n")
+                for dt in data_types:
+                    count = sum(1 for r in results if r.get('data_type') == dt)
+                    f.write(f"  - {dt}: {count} experiments\n")
+                f.write("\n")
+
+                # Performance summary
+                nmse_values = [r['nmse_global'] for r in results if 'nmse_global' in r]
+                if nmse_values:
+                    f.write("PERFORMANCE SUMMARY:\n")
+                    f.write(f"  - Average NMSE: {np.mean(nmse_values):.6f}\n")
+                    f.write(f"  - Min NMSE: {np.min(nmse_values):.6f}\n")
+                    f.write(f"  - Max NMSE: {np.max(nmse_values):.6f}\n")
+                    f.write(f"  - Std NMSE: {np.std(nmse_values):.6f}\n")
+                    f.write("\n")
+
+                consensus_errors = [r['consensus_error'] for r in results if 'consensus_error' in r]
+                if consensus_errors:
+                    f.write("CONSENSUS ANALYSIS:\n")
+                    f.write(f"  - Average Consensus Error: {np.mean(consensus_errors):.6f}\n")
+                    f.write(f"  - Min Consensus Error: {np.min(consensus_errors):.6f}\n")
+                    f.write(f"  - Max Consensus Error: {np.max(consensus_errors):.6f}\n")
+                    f.write("\n")
+
+                fit_times = [r['fit_time'] for r in results if 'fit_time' in r]
+                if fit_times:
+                    f.write("TIMING ANALYSIS:\n")
+                    f.write(f"  - Average Fit Time: {np.mean(fit_times):.4f}s\n")
+                    f.write(f"  - Total Time: {np.sum(fit_times):.4f}s\n")
+                    f.write(f"  - Min Fit Time: {np.min(fit_times):.4f}s\n")
+                    f.write(f"  - Max Fit Time: {np.max(fit_times):.4f}s\n")
+                    f.write("\n")
+
+            # Detailed results
+            f.write("DETAILED RESULTS:\n")
+            f.write("-" * 80 + "\n")
+
+            for i, result in enumerate(results, 1):
+                f.write(f"\nExperiment {i}:\n")
+                f.write(f"  Data Type: {result.get('data_type', 'N/A')}\n")
+                f.write(f"  Graph File: {result.get('graph_file', 'N/A')}\n")
+                f.write(f"  Nodes: {result.get('num_nodes', 'N/A')}\n")
+                f.write(f"  Edges: {result.get('num_edges', 'N/A')}\n")
+                f.write(f"  Density: {result.get('density', 'N/A'):.4f}\n")
+                f.write(f"  Is DAG: {result.get('is_dag', 'N/A')}\n")
+                f.write(f"  Global NMSE: {result.get('nmse_global', 'N/A'):.6f}\n")
+                f.write(f"  Mean NMSE per Node: {result.get('mean_nmse_per_node', 'N/A'):.6f}\n")
+                f.write(f"  Std NMSE per Node: {result.get('std_nmse_per_node', 'N/A'):.6f}\n")
+                f.write(f"  Consensus Error: {result.get('consensus_error', 'N/A'):.6f}\n")
+                f.write(f"  Bytes Transferred: {result.get('bytes', 'N/A')}\n")
+                f.write(f"  Iterations: {result.get('iters', 'N/A')}\n")
+                f.write(f"  Fit Time: {result.get('fit_time', 'N/A'):.4f}s\n")
+
+            f.write("\n" + "=" * 80 + "\n")
+            f.write("REPORT COMPLETE\n")
+            f.write("=" * 80 + "\n")
+
+    elif format_type == 'csv':
+        if results:
+            fieldnames = ['experiment_id', 'data_type', 'graph_file', 'num_nodes', 'num_edges',
+                         'density', 'is_dag', 'nmse_global', 'mean_nmse_per_node', 'std_nmse_per_node',
+                         'consensus_error', 'bytes', 'iters', 'fit_time']
+
+            with open(filepath, 'w', newline='') as csvfile:
+                writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                writer.writeheader()
+
+                for i, result in enumerate(results, 1):
+                    row = {'experiment_id': i}
+                    row.update({k: result.get(k, 'N/A') for k in fieldnames[1:]})
+                    writer.writerow(row)
+
+    elif format_type == 'json':
+        # Add metadata
+        report_data = {
+            'metadata': {
+                'generated_at': time.ctime(),
+                'total_experiments': len(results),
+                'format_version': '1.0'
+            },
+            'summary': {},
+            'results': results
+        }
+
+        # Add summary statistics
+        if results:
+            nmse_values = [r['nmse_global'] for r in results if 'nmse_global' in r]
+            if nmse_values:
+                report_data['summary']['nmse'] = {
+                    'mean': float(np.mean(nmse_values)),
+                    'min': float(np.min(nmse_values)),
+                    'max': float(np.max(nmse_values)),
+                    'std': float(np.std(nmse_values))
+                }
+
+            consensus_errors = [r['consensus_error'] for r in results if 'consensus_error' in r]
+            if consensus_errors:
+                report_data['summary']['consensus_error'] = {
+                    'mean': float(np.mean(consensus_errors)),
+                    'min': float(np.min(consensus_errors)),
+                    'max': float(np.max(consensus_errors))
+                }
+
+            fit_times = [r['fit_time'] for r in results if 'fit_time' in r]
+            if fit_times:
+                report_data['summary']['timing'] = {
+                    'mean_fit_time': float(np.mean(fit_times)),
+                    'total_time': float(np.sum(fit_times)),
+                    'min_fit_time': float(np.min(fit_times)),
+                    'max_fit_time': float(np.max(fit_times))
+                }
+
+        with open(filepath, 'w') as f:
+            json.dump(report_data, f, indent=2)
+
+    print(f"Detailed report saved to {filepath}")
+
+
+def save_experiment_summary(results, filepath='results/experiment_summary.txt'):
+    """
+    Save a concise summary of experimental results.
+
+    Parameters
+    ----------
+    results : list
+        List of result dictionaries from experiments
+    filepath : str
+        Path to save the summary
+    """
+    import time
+    import os
+
+    if os.path.dirname(filepath):
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+    with open(filepath, 'w') as f:
+        f.write("EXPERIMENT SUMMARY\n")
+        f.write("=" * 50 + "\n")
+        f.write(f"Generated: {time.ctime()}\n")
+        f.write(f"Total Experiments: {len(results)}\n\n")
+
+        if results:
+            # Group by data type
+            from collections import defaultdict
+            by_data_type = defaultdict(list)
+            for r in results:
+                by_data_type[r.get('data_type', 'Unknown')].append(r)
+
+            for data_type, type_results in by_data_type.items():
+                f.write(f"Data Type: {data_type}\n")
+                f.write(f"  Experiments: {len(type_results)}\n")
+
+                nmse_vals = [r['nmse_global'] for r in type_results if 'nmse_global' in r]
+                if nmse_vals:
+                    f.write(f"  Avg NMSE: {np.mean(nmse_vals):.6f} ± {np.std(nmse_vals):.6f}\n")
+
+                times = [r['fit_time'] for r in type_results if 'fit_time' in r]
+                if times:
+                    f.write(f"  Avg Time: {np.mean(times):.4f}s\n")
+
+                f.write("\n")
+
+        f.write("Top 5 Best Performing (by NMSE):\n")
+        sorted_results = sorted(results, key=lambda x: x.get('nmse_global', float('inf')))
+        for i, r in enumerate(sorted_results[:5], 1):
+            f.write(f"{i}. {r.get('graph_file', 'N/A')}: NMSE={r.get('nmse_global', 'N/A'):.6f}\n")
+
+        f.write("\nTop 5 Fastest:\n")
+        sorted_by_time = sorted(results, key=lambda x: x.get('fit_time', float('inf')))
+        for i, r in enumerate(sorted_by_time[:5], 1):
+            f.write(f"{i}. {r.get('graph_file', 'N/A')}: {r.get('fit_time', 'N/A'):.4f}s\n")
