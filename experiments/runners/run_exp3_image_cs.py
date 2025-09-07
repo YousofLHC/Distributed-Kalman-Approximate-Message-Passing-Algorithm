@@ -6,6 +6,7 @@ import os
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import networkx as nx
+from matplotlib import image as mpimg
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
@@ -15,7 +16,6 @@ from ampire.core.kamp import KAMP
 from ampire.core.amp import AMP
 from ampire.distributed.distributed_kamp import DistributedKAMP
 from ampire.utils.metrics import calculate_ssim
-from experiments.datasets.image_loaders import load_lena  # Assuming this function exists
 
 def run_solver(method, A, y):
     if method == 'KAMP':
@@ -75,9 +75,23 @@ def run_solver(method, A, y):
 def run_experiment():
     results = []
 
-    # Load image
-    image = load_lena()  # Assume grayscale, shape (h, w)
-    h, w = image.shape
+    # Load image using matplotlib's built-in test image
+    # Since scipy.misc.face is deprecated, we'll use a simple test image
+    # Create a simple test image (you can replace this with actual image loading)
+    h, w = 64, 64  # Reduced size for memory efficiency
+    x_center, y_center = h // 2, w // 2
+
+    # Create a simple circular pattern as test image
+    y_coords, x_coords = np.ogrid[:h, :w]
+    mask = (x_coords - x_center)**2 + (y_coords - y_center)**2 < (min(h, w) // 4)**2
+    image = np.zeros((h, w))
+    image[mask] = 1.0
+
+    # Add some noise for more realistic testing
+    np.random.seed(42)
+    image += 0.1 * np.random.randn(h, w)
+    image = np.clip(image, 0, 1)
+
     n = h * w
     x = image.flatten()
 
