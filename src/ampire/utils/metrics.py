@@ -1,9 +1,100 @@
 import numpy as np
+import warnings
+from typing import Literal
 from sklearn.metrics import (
     roc_auc_score, precision_recall_curve, precision_score, recall_score,
     f1_score, cohen_kappa_score, confusion_matrix, balanced_accuracy_score,
     matthews_corrcoef
 )
+
+# Changelog: Added principled zero-division handling with safe_divide function,
+# avoiding +1 trick. Consistent with scikit-learn's zero_division parameter.
+
+ZeroDivMode = Literal["epsilon", "zero", "nan", "raise"]
+DEFAULT_ZERO_DIVISION_CLASSIF: ZeroDivMode = "zero"
+DEFAULT_ZERO_DIVISION_RECON: ZeroDivMode = "nan"
+DEFAULT_EPS = 1e-12
+
+
+def safe_divide(
+    num: np.ndarray | float,
+    den: np.ndarray | float,
+    *,
+    mode: ZeroDivMode = "epsilon",
+    epsilon: float = DEFAULT_EPS,
+    where: np.ndarray | None = None,
+    warn: bool = True
+) -> np.ndarray | float:
+    """
+    Numerically stable division for metric computation.
+
+    This function provides principled handling of division-by-zero in evaluation metrics,
+    avoiding the statistically unjustified +1 trick used in some implementations.
+    Instead, it follows common practices similar to scikit-learn's zero_division parameter,
+    with additional epsilon-smoothing for numerical stability.
+
+    Modes:
+      - "epsilon": return num / (den + epsilon)   # preferred default for stability
+      - "zero":    return 0.0 where den==0
+      - "nan":     return np.nan where den==0
+      - "raise":   raise ZeroDivisionError for any den==0
+
+    If `where` is provided, apply mode only on entries where `den==0 & where`.
+    When `warn=True` and any den==0 occurs (except mode='raise'), log a one-time warning.
+
+    Parameters
+    ----------
+    num : np.ndarray | float
+        Numerator.
+    den : np.ndarray | float
+        Denominator.
+    mode : ZeroDivMode, default="epsilon"
+        How to handle den==0.
+    epsilon : float, default=1e-12
+        Small value for epsilon mode.
+    where : np.ndarray | None, default=None
+        Optional mask for conditional application.
+    warn : bool, default=True
+        Whether to warn on zero denominators.
+
+    Returns
+    -------
+    np.ndarray | float
+        Result of division with zero-handling.
+    """
+    num = np.asarray(num, dtype=np.float64)
+    den = np.asarray(den, dtype=np.float64)
+
+    zero_mask = den == 0
+    if where is not None:
+        zero_mask = zero_mask & where
+
+    if np.any(zero_mask):
+        if warn:
+            warnings.warn(
+                f"Zero denominator encountered in safe_divide. "
+                f"Resolved using mode='{mode}'. "
+                f"Consider using epsilon-smoothing for numerical stability.",
+                UserWarning,
+                stacklevel=2
+            )
+        if mode == "raise":
+            raise ZeroDivisionError("Division by zero encountered.")
+        elif mode == "zero":
+            with np.errstate(divide='ignore', invalid='ignore'):
+                result = np.where(zero_mask, 0.0, num / den)
+        elif mode == "nan":
+            with np.errstate(divide='ignore', invalid='ignore'):
+                result = np.where(zero_mask, np.nan, num / den)
+        elif mode == "epsilon":
+            den_smooth = np.where(zero_mask, epsilon, den)
+            result = num / den_smooth
+        else:
+            raise ValueError(f"Invalid mode: {mode}")
+    else:
+        result = num / den
+
+    return result.item() if result.ndim == 0 else result
 
 def calculate_metrics(y_true: np.ndarray, y_score: np.ndarray) -> dict:
     """
@@ -53,18 +144,21 @@ def calculate_anomaly_detection_metrics(y_true: np.ndarray, y_pred: np.ndarray) 
     # Confusion matrix elements
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
 
-    # Specificity
-    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+    # Specificity (TNR)
+    specificity = safe_divide(tn, tn + fp, mode=DEFAULT_ZERO_DIVISION_CLASSIF)
 
     # Additional rates
-    fpr = fp / (fp + tn) if (fp + tn) > 0 else 0  # False Positive Rate
-    fnr = fn / (fn + tp) if (fn + tp) > 0 else 0  # False Negative Rate
-    fdr = fp / (fp + tp) if (fp + tp) > 0 else 0  # False Discovery Rate
-    npv = tn / (tn + fn) if (tn + fn) > 0 else 0  # Negative Predictive Value
-    for_ = fn / (fn + tn) if (fn + tn) > 0 else 0  # False Omission Rate
+    fpr = safe_divide(fp, fp + tn, mode=DEFAULT_ZERO_DIVISION_CLASSIF)  # False Positive Rate
+    fnr = safe_divide(fn, fn + tp, mode=DEFAULT_ZERO_DIVISION_CLASSIF)  # False Negative Rate
+    fdr = safe_divide(fp, fp + tp, mode=DEFAULT_ZERO_DIVISION_CLASSIF)  # False Discovery Rate
+    npv = safe_divide(tn, tn + fn, mode=DEFAULT_ZERO_DIVISION_CLASSIF)  # Negative Predictive Value
+    for_ = safe_divide(fn, fn + tn, mode=DEFAULT_ZERO_DIVISION_CLASSIF)  # False Omission Rate
 
     # F2 score
-    f2 = (5 * precision * recall) / (4 * precision + recall) if (4 * precision + recall) > 0 else 0
+    if precision == 0.0 and recall == 0.0:
+        f2 = 0.0
+    else:
+        f2 = safe_divide(5 * precision * recall, 4 * precision + recall, mode=DEFAULT_ZERO_DIVISION_CLASSIF)
 
     # G-Mean
     g_mean = np.sqrt(recall * specificity)
@@ -113,9 +207,21 @@ def calculate_compressive_sensing_metrics(y_true: np.ndarray, y_pred: np.ndarray
     """
     mse = np.mean((y_true - y_pred) ** 2)
     rmse = np.sqrt(mse)
-    nmse = mse / np.var(y_true) if np.var(y_true) > 0 else 0
-    snr = 10 * np.log10(np.var(y_true) / mse) if mse > 0 else float('inf')
-    peak_snr = 20 * np.log10(np.max(np.abs(y_true)) / np.sqrt(mse)) if mse > 0 else float('inf')
+    nmse = safe_divide(mse, np.var(y_true), mode=DEFAULT_ZERO_DIVISION_RECON)
+
+    # SNR: Signal-to-Noise Ratio
+    if mse == 0:
+        snr = float('inf')
+    else:
+        mse_clamped = max(mse, DEFAULT_EPS)
+        snr = 10 * np.log10(safe_divide(np.var(y_true), mse_clamped, mode=DEFAULT_ZERO_DIVISION_RECON))
+
+    # Peak SNR (PSNR)
+    if mse == 0:
+        peak_snr = float('inf')
+    else:
+        mse_clamped = max(mse, DEFAULT_EPS)
+        peak_snr = 20 * np.log10(safe_divide(np.max(np.abs(y_true))**2, mse_clamped, mode=DEFAULT_ZERO_DIVISION_RECON))
 
     return {'mse': mse, 'rmse': rmse, 'nmse': nmse, 'snr': snr, 'peak_snr': peak_snr}
 
