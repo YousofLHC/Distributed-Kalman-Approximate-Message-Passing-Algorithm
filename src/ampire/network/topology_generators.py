@@ -2,7 +2,7 @@
 import networkx as nx
 import numpy as np
 
-def create_dag(num_nodes: int, edge_prob: float = 0.3, rng=None) -> nx.DiGraph:
+def create_dag(num_nodes: int, edge_prob: float = 0.3, rng=None, **kwargs) -> nx.DiGraph:
     rng = rng or np.random.RandomState()
     G = nx.DiGraph()
     G.add_nodes_from(range(num_nodes))
@@ -12,7 +12,7 @@ def create_dag(num_nodes: int, edge_prob: float = 0.3, rng=None) -> nx.DiGraph:
                 G.add_edge(i, j)
     return G
 
-def create_directed_with_cycles(num_nodes: int, edge_prob: float = 0.3, rng=None) -> nx.DiGraph:
+def create_directed_with_cycles(num_nodes: int, edge_prob: float = 0.3, rng=None, **kwargs) -> nx.DiGraph:
     rng = rng or np.random.RandomState()
     G = nx.DiGraph()
     G.add_nodes_from(range(num_nodes))
@@ -23,7 +23,7 @@ def create_directed_with_cycles(num_nodes: int, edge_prob: float = 0.3, rng=None
     return G
 
 def create_directed_with_cycles_and_loops(num_nodes: int, edge_prob: float = 0.3,
-                                          self_loop_prob: float = 0.05, rng=None) -> nx.DiGraph:
+                                          self_loop_prob: float = 0.05, rng=None, **kwargs) -> nx.DiGraph:
     G = create_directed_with_cycles(num_nodes, edge_prob, rng)
     rng = rng or np.random.RandomState()
     for i in range(num_nodes):
@@ -31,7 +31,7 @@ def create_directed_with_cycles_and_loops(num_nodes: int, edge_prob: float = 0.3
             G.add_edge(i, i)
     return G
 
-def create_star_with_extra_edges(num_nodes: int, extra_edge_prob: float = 0.1, rng=None) -> nx.DiGraph:
+def create_star_with_extra_edges(num_nodes: int, extra_edge_prob: float = 0.1, rng=None, **kwargs) -> nx.DiGraph:
     """A star directed outward from node 0; outer nodes may connect among themselves."""
     rng = rng or np.random.RandomState()
     G = nx.DiGraph()
@@ -46,7 +46,7 @@ def create_star_with_extra_edges(num_nodes: int, extra_edge_prob: float = 0.1, r
                 G.add_edge(i, j)
     return G
 
-def create_leafs_to_final_node(num_nodes: int) -> nx.DiGraph:
+def create_leafs_to_final_node(num_nodes: int, **kwargs) -> nx.DiGraph:
     """A tree where every leaf connects to a final sink node (last index)."""
     G = nx.DiGraph()
     G.add_nodes_from(range(num_nodes))
@@ -60,7 +60,7 @@ def create_leafs_to_final_node(num_nodes: int) -> nx.DiGraph:
     return G
 
 def create_tree_with_leaf_connections(num_nodes: int, leaf_edge_prob: float = 0.2,
-                                      back_edge_prob: float = 0.1, rng=None) -> nx.DiGraph:
+                                      back_edge_prob: float = 0.1, rng=None, **kwargs) -> nx.DiGraph:
     """
     Build a directed tree (root 0). Leaves may connect among themselves (leaf_edge_prob)
     and may have edges back toward ancestors (back_edge_prob).
@@ -85,7 +85,7 @@ def create_tree_with_leaf_connections(num_nodes: int, leaf_edge_prob: float = 0.
             G.add_edge(i, ancestor)
     return G
 
-def create_bidirectional(num_nodes: int, bidirectional_prob: float = 0.2, rng=None) -> nx.DiGraph:
+def create_bidirectional(num_nodes: int, bidirectional_prob: float = 0.2, rng=None, **kwargs) -> nx.DiGraph:
     """
     Create a directed graph where some pairs of nodes have edges in both directions.
     """
