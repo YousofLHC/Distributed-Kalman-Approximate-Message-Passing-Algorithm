@@ -2,7 +2,7 @@
 import networkx as nx
 import numpy as np
 
-def create_dag(num_nodes: int, edge_prob: float = 0.3, rng=None, **kwargs) -> nx.DiGraph:
+def create_dag(num_nodes: int, edge_prob: float = 0.95, rng=None, **kwargs) -> nx.DiGraph:
     rng = rng or np.random.RandomState()
     G = nx.DiGraph()
     G.add_nodes_from(range(num_nodes))
@@ -12,7 +12,7 @@ def create_dag(num_nodes: int, edge_prob: float = 0.3, rng=None, **kwargs) -> nx
                 G.add_edge(i, j)
     return G
 
-def create_directed_with_cycles(num_nodes: int, edge_prob: float = 0.3, rng=None, **kwargs) -> nx.DiGraph:
+def create_directed_with_cycles(num_nodes: int, edge_prob: float = 0.95, rng=None, **kwargs) -> nx.DiGraph:
     rng = rng or np.random.RandomState()
     G = nx.DiGraph()
     G.add_nodes_from(range(num_nodes))
@@ -22,7 +22,7 @@ def create_directed_with_cycles(num_nodes: int, edge_prob: float = 0.3, rng=None
                 G.add_edge(i, j)
     return G
 
-def create_directed_with_cycles_and_loops(num_nodes: int, edge_prob: float = 0.3,
+def create_directed_with_cycles_and_loops(num_nodes: int, edge_prob: float = 0.95,
                                           self_loop_prob: float = 0.05, rng=None, **kwargs) -> nx.DiGraph:
     G = create_directed_with_cycles(num_nodes, edge_prob, rng)
     rng = rng or np.random.RandomState()
