@@ -9,10 +9,15 @@ import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+from itertools import product
 sys.path.insert(0, 'src')
 from ampire.distributed.distributed_kamp import DistributedKAMP
 from ampire.network.graph import MyGraph
-from ampire.utils.metrics import log_results, save_detailed_report, save_experiment_summary
+from ampire.utils.metrics import (
+    log_results, save_detailed_report, save_experiment_summary,
+    calculate_compressive_sensing_metrics, calculate_ssim, calculate_gmsd,
+    calculate_fsim, calculate_vif
+)
 
 def generate_synthetic_data(num_samples=900, num_features=70, sparsity=0.1, noise_std=0.1, random_state=42, is_2d=False, shape_2d=(10, 7)):
     """
@@ -42,6 +47,136 @@ def generate_synthetic_data(num_samples=900, num_features=70, sparsity=0.1, nois
     y = A @ x_true_flat + noise
     return A, y, x_true_flat, x_true
 
+def grid_search_hyperparameters(A, y, x_true_flat, G, param_grids, is_2d=False, x_true_2d=None, random_state=42):
+    """
+    Perform grid search over hyperparameters for DistributedKAMP.
+
+    Args:
+        A: Measurement matrix
+        y: Observations
+        x_true_flat: True signal
+        G: Graph
+        param_grids: Dict of parameter grids
+        random_state: Random seed
+
+    Returns:
+        Dict of best parameters for each metric
+    """
+    # Partition data
+    num_nodes = G.number_of_nodes()
+    samples_per_node = len(y) // num_nodes
+    A_list = []
+    y_list = []
+    start = 0
+    for i in range(num_nodes):
+        end = start + samples_per_node if i < num_nodes - 1 else len(y)
+        A_list.append(A[start:end])
+        y_list.append(y[start:end])
+        start = end
+
+    # Generate all parameter combinations
+    keys = param_grids.keys()
+    values = param_grids.values()
+    param_combinations = list(product(*values))
+
+    results = []
+
+    print("Starting grid search...")
+    for params in tqdm(param_combinations, desc="Grid search"):
+        param_dict = dict(zip(keys, params))
+        try:
+            start_time = time.time()
+            dk = DistributedKAMP(
+                alpha=param_dict['alpha'],
+                tau=param_dict['tau'],
+                node_max_iter=param_dict['node_max_iter'],
+                num_triggers=param_dict['num_triggers'],
+                graph=G,
+                A_list=A_list,
+                y_list=y_list,
+                random_state=random_state,
+                just_dag=False
+            )
+            dk.fit()
+            fit_time = time.time() - start_time
+
+            x_est = dk.solve()
+            node_estimates = dk.get_node_estimates()
+
+            # Compute compressive sensing metrics
+            cs_metrics = calculate_compressive_sensing_metrics(x_true_flat, x_est)
+            nmse_global = cs_metrics['nmse']
+            mse_global = cs_metrics['mse']
+            rmse_global = cs_metrics['rmse']
+            snr_global = cs_metrics['snr']
+            peak_snr_global = cs_metrics['peak_snr']
+
+            # Compute per-node metrics
+            nmse_per_node = [calculate_compressive_sensing_metrics(x_true_flat, x)['nmse'] for x in node_estimates]
+            mean_nmse_per_node = np.mean(nmse_per_node)
+            std_nmse_per_node = np.std(nmse_per_node)
+
+            # Consensus error
+            consensus_error = np.var([np.linalg.norm(x - x_est) for x in node_estimates])
+
+            # Image quality metrics (for 2D case)
+            image_metrics = {}
+            if is_2d and x_true_2d is not None:
+                x_est_2d = x_est.reshape(x_true_2d.shape)
+                try:
+                    image_metrics['ssim'] = calculate_ssim(x_true_2d, x_est_2d)
+                    image_metrics['gmsd'] = calculate_gmsd(x_true_2d, x_est_2d)
+                    image_metrics['fsim'] = calculate_fsim(x_true_2d, x_est_2d)
+                    image_metrics['vif'] = calculate_vif(x_true_2d, x_est_2d)
+                except Exception as e:
+                    print(f"Error computing image metrics: {e}")
+                    image_metrics = {'ssim': np.nan, 'gmsd': np.nan, 'fsim': np.nan, 'vif': np.nan}
+
+            result = {
+                'params': param_dict,
+                'nmse_global': nmse_global,
+                'mse_global': mse_global,
+                'rmse_global': rmse_global,
+                'snr_global': snr_global,
+                'peak_snr_global': peak_snr_global,
+                'mean_nmse_per_node': mean_nmse_per_node,
+                'std_nmse_per_node': std_nmse_per_node,
+                'consensus_error': consensus_error,
+                'fit_time': fit_time
+            }
+            result.update(image_metrics)
+            results.append(result)
+        except Exception as e:
+            print(f"Error with params {param_dict}: {e}")
+            continue
+
+    # Find best parameters for each metric
+    best_params = {}
+
+    # Metrics to minimize
+    minimize_metrics = ['nmse_global', 'mse_global', 'rmse_global', 'consensus_error', 'fit_time']
+    if is_2d:
+        minimize_metrics.append('gmsd')
+
+    # Metrics to maximize
+    maximize_metrics = ['snr_global', 'peak_snr_global']
+    if is_2d:
+        maximize_metrics.extend(['ssim', 'fsim', 'vif'])
+
+    for metric in minimize_metrics:
+        if any(metric in r for r in results):
+            best = min(results, key=lambda x: x.get(metric, float('inf')))
+            best_params[metric] = best['params']
+            print(f"Best params for {metric}: {best['params']} with value {best[metric]:.4f}")
+
+    for metric in maximize_metrics:
+        if any(metric in r for r in results):
+            best = max(results, key=lambda x: x.get(metric, -float('inf')))
+            best_params[metric] = best['params']
+            print(f"Best params for {metric}: {best['params']} with value {best[metric]:.4f}")
+
+    return best_params
+
 def main():
     # Check if topology_plots exists and has files
     topology_dir = 'topology_plots'
@@ -58,6 +193,25 @@ def main():
         return
 
     print(f"Found {len(adj_files)} adjacency files")
+
+    # Define parameter grids for grid search
+    param_grids = {
+        'alpha': [0.1, 0.3, 0.5, 0.7, 0.9],
+        'tau': [0.01, 0.05, 0.1, 0.2, 0.5],
+        'node_max_iter': [10, 20, 50, 100],
+        'num_triggers': [50, 100, 200, 500]
+    }
+
+    # Load first topology for grid search
+    first_adj_file = adj_files[0]
+    first_adj = np.loadtxt(first_adj_file)
+    first_num_nodes = first_adj.shape[0]
+    first_G = MyGraph()
+    first_G.add_nodes_from(range(first_num_nodes))
+    for i in range(first_num_nodes):
+        for j in range(first_num_nodes):
+            if first_adj[i, j] == 1:
+                first_G.add_edge(i, j)
 
     # Loop over Complex and 2D data
     for is_2d in [True, False]:
@@ -78,6 +232,18 @@ def main():
 
         num_samples, num_features = A.shape
         print(f"True signal sparsity: {np.sum(x_true_flat != 0)} non-zero elements")
+
+        # Perform grid search for hyperparameter optimization
+        print(f"Performing grid search for {data_type} data...")
+        best_params = grid_search_hyperparameters(A, y, x_true_flat, first_G, param_grids, is_2d=is_2d, x_true_2d=x_true_2d, random_state=42)
+        optimal_params = best_params['nmse_global']  # Use best for NMSE as primary metric
+        print(f"Optimal parameters for {data_type}: {optimal_params}")
+
+        # Save best parameters
+        best_params_file = f'best_hyperparams_{data_type}.json'
+        with open(best_params_file, 'w') as f:
+            json.dump(best_params, f, indent=4)
+        print(f"Best hyperparameters saved to {best_params_file}")
 
         # Create directory for plots
         data_type = '2d' if is_2d else 'Complex'
@@ -117,13 +283,13 @@ def main():
             density = nx.density(G)
             is_dag = nx.is_directed_acyclic_graph(G)
 
-            # Run DistributedKAMP
+            # Run DistributedKAMP with optimal parameters
             start_time = time.time()
             dk = DistributedKAMP(
-                alpha=0.5,
-                tau=0.1,
-                node_max_iter=50,
-                num_triggers=100,
+                alpha=optimal_params['alpha'],
+                tau=optimal_params['tau'],
+                node_max_iter=optimal_params['node_max_iter'],
+                num_triggers=optimal_params['num_triggers'],
                 graph=G,
                 A_list=A_list,
                 y_list=y_list,
