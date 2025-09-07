@@ -117,51 +117,52 @@ class MyGraph(nx.DiGraph):
     def plot(self, seed=42, show=True):
         # موقعیت گره‌ها با layout پویا و یکنواخت
         pos = nx.kamada_kawai_layout(self)
-    
+
         # اندازه گره‌ها بر اساس درجه
         node_degrees = np.array([self.degree(n) for n in self.nodes()])
         node_sizes = 300 + 80 * node_degrees
-    
+
         # رنگ گره‌ها: colormap پیوسته یا categorical
         cmap_nodes = plt.cm.Paired
         norm_nodes = mcolors.Normalize(vmin=node_degrees.min(), vmax=node_degrees.max())
         node_colors = [cmap_nodes(norm_nodes(d)) for d in node_degrees]
-    
+
         # رسم گره‌ها
         nx.draw_networkx_nodes(self, pos, node_size=node_sizes, node_color=node_colors, edgecolors='black', linewidths=0.8)
-    
+
         # برچسب گره‌ها
         labels = {node: node.name for node in self.nodes()}
         nx.draw_networkx_labels(self, pos, labels, font_size=11, font_color="black", font_weight="bold")
-    
+
         # رنگ و ضخامت یال‌ها بر اساس وزن
-        weights = np.array([d.get('weight', 0.5) for u, v, d in self.edges(data=True)])
-        widths = 1.5 + 3 * (weights - weights.min()) / (weights.max() - weights.min() + 1e-9)
-        cmap_edges = plt.cm.viridis
-        norm_edges = mcolors.Normalize(vmin=weights.min(), vmax=weights.max())
-        edge_colors = cmap_edges(norm_edges(weights))
-    
-        # رسم یال‌ها
-        edges = nx.draw_networkx_edges(
-            self, pos,
-            width=widths,
-            edge_color=edge_colors,
-            arrowstyle='-|>',
-            arrowsize=16,
-            connectionstyle='arc3,rad=0.1'
-        )
-    
-        # برچسب وزن یال‌ها
-        edge_labels = {(u, v): f"{d.get('weight', 0):.2f}" for u, v, d in self.edges(data=True)}
-        nx.draw_networkx_edge_labels(self, pos, edge_labels=edge_labels, font_color="firebrick", font_size=9)
-    
-        # colorbar برای وزن یال‌ها
-        sm = plt.cm.ScalarMappable(cmap=cmap_edges, norm=norm_edges)
-        sm.set_array(weights)
         ax = plt.gca()
-        cbar = plt.colorbar(sm, ax=ax)
-        cbar.set_label("Edge Weight", fontsize=11)
-    
+        if self.edges():
+            weights = np.array([d.get('weight', 0.5) for u, v, d in self.edges(data=True)])
+            widths = 1.5 + 3 * (weights - weights.min()) / (weights.max() - weights.min() + 1e-9)
+            cmap_edges = plt.cm.viridis
+            norm_edges = mcolors.Normalize(vmin=weights.min(), vmax=weights.max())
+            edge_colors = cmap_edges(norm_edges(weights))
+
+            # رسم یال‌ها
+            edges = nx.draw_networkx_edges(
+                self, pos,
+                width=widths,
+                edge_color=edge_colors,
+                arrowstyle='-|>',
+                arrowsize=16,
+                connectionstyle='arc3,rad=0.1'
+            )
+
+            # برچسب وزن یال‌ها
+            edge_labels = {(u, v): f"{d.get('weight', 0):.2f}" for u, v, d in self.edges(data=True)}
+            nx.draw_networkx_edge_labels(self, pos, edge_labels=edge_labels, font_color="firebrick", font_size=9)
+
+            # colorbar برای وزن یال‌ها
+            sm = plt.cm.ScalarMappable(cmap=cmap_edges, norm=norm_edges)
+            sm.set_array(weights)
+            cbar = plt.colorbar(sm, ax=ax)
+            cbar.set_label("Edge Weight", fontsize=11)
+
         # تنظیمات نهایی
         ax.set_facecolor("#f5f5f5")
         ax.set_title("Dynamic Network Visualization", fontsize=15, fontweight="bold", pad=15)
