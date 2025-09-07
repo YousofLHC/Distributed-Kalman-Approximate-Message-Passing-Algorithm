@@ -259,13 +259,21 @@ def main():
         return
 
     # Loop over 2D and Complex data
-    for is_2d in [True, False]:
+    for is_2d in [False, True]:
         # Define data_type early to avoid UnboundLocalError in exception handlers
         data_type = '2d' if is_2d else 'Complex'
 
         print(f"\n{'='*50}")
         print(f"Testing with {'2D' if is_2d else 'Complex'} synthetic data")
         print(f"{'='*50}")
+
+        # Create results directory structure BEFORE grid search
+        results_base_dir = f'experiments/results/distributed_kamp_topologies_{data_type}'
+        plots_dir = f'{results_base_dir}/plots'
+        intermediate_dir = f'{results_base_dir}/intermediate'
+        os.makedirs(results_base_dir, exist_ok=True)
+        os.makedirs(plots_dir, exist_ok=True)
+        os.makedirs(intermediate_dir, exist_ok=True)
 
         try:
             num_samples = 900
@@ -311,14 +319,8 @@ def main():
             # Use default parameters if grid search fails
             optimal_params = {'alpha': 0.5, 'tau': 0.1, 'node_max_iter': 50, 'num_triggers': 100}
             print(f"Using default parameters: {optimal_params}")
-        # Create results directory structure
-        results_base_dir = f'experiments/results/distributed_kamp_topologies_{data_type}'
-        plots_dir = f'{results_base_dir}/plots'
-        intermediate_dir = f'{results_base_dir}/intermediate'
-        os.makedirs(results_base_dir, exist_ok=True)
-        os.makedirs(plots_dir, exist_ok=True)
-        os.makedirs(intermediate_dir, exist_ok=True)
 
+        # Initialize results list BEFORE grid search
         results = []
 
         pbar = tqdm(adj_files, desc="Processing graphs")
