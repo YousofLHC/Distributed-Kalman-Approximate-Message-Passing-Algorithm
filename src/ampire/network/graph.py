@@ -103,6 +103,17 @@ class MyGraph(nx.DiGraph):
         for node1, node2, weight in edges:
             self.add_edge(node1, node2, x=node1.x, weight=weight)
 
+    def get_adjacency_matrix(self):
+        """Get the adjacency matrix of the graph."""
+        return nx.to_numpy_array(self, weight='weight')
+
+    def save_adjacency_matrix(self, filename):
+        """Save the adjacency matrix to a file."""
+        adj_matrix = self.get_adjacency_matrix()
+        np.save(filename, adj_matrix)
+        print(f"Adjacency matrix saved to {filename}.npy")
+        return adj_matrix
+
     def plot(self, seed=42, show=True):
         # موقعیت گره‌ها با layout پویا و یکنواخت
         pos = nx.kamada_kawai_layout(self)
