@@ -13,7 +13,8 @@ class DistributedKAMP(KAMP):
     """
     def __init__(self, alpha: float, tau: float, node_max_iter: Union[int, List[int]],
                  num_triggers: int, graph: MyGraph, A_list: List[np.ndarray],
-                 y_list: List[np.ndarray], random_state: int = None, verbose: bool = False,
+                 y_list: List[np.ndarray], random_state: int = None, record_history: bool = False, 
+                 verbose: bool = False,
                  just_dag: bool = False):
         """
         Initialize DistributedKAMP.
@@ -30,6 +31,8 @@ class DistributedKAMP(KAMP):
             just_dag: If True, enforce that graph must be a DAG. If False, allow any directed graph. Default is False.
         """
         super().__init__(alpha=alpha, tau=tau, max_iter=1, verbose=verbose)
+        self.record_history = record_history
+        self.history = []
         self.num_triggers = num_triggers
         self.graph = graph
         self.A_list = A_list
@@ -91,13 +94,22 @@ class DistributedKAMP(KAMP):
         for _ in range(self.num_triggers):
             selected_node = self.rng.choice(self.node_estimators)
             self.my_graph.trigger(selected_node, inplace=True)
-
+            if self.record_history:
+                # after each trigger, compute consensus error
+                x_global = self.solve()
+                node_estimates = [node.x for node in self.node_estimators]
+                consensus_error = np.var([np.linalg.norm(x - x_global) for x in node_estimates])
+                self.history.append(consensus_error)
+        # final update
         # Update local estimates based on graph messages
         for node in self.node_estimators:
             self.my_graph.total_in_degree(node, inplace=True)
-
         return self
-
+    def save_history(self, filepath: str):
+        import json
+        with open(filepath, 'w') as f:
+            json.dump(self.history, f)
+            
     def solve(self) -> np.ndarray:
         """
         Return the global estimate by averaging node estimates.
