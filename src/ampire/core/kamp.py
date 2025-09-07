@@ -82,8 +82,8 @@ class KAMP(BaseEstimator):
         self.x            = np.zeros((self.n, 1)) # Initialize signal estimate to zeros for stability
         self.I_n          = np.eye(self.n) # Identity matrix, I_n ∈ ℝ^{n×n}
         self.z            = self.y.copy() # Initial residual, z_{[0]} = y - A * x̂_{[0]}
-        self._P           = 0.1 * self.I_n # Initial covariance matrix, smaller value for stability
-        self.Q            = 0.01 * self.I_n # Initial process noise covariance, smaller value for stability
+        self._P           = self.sigma2 * self.I_n # Initial covariance matrix, smaller value for stability
+        self.Q            = self.sigma2 * self.I_n # Initial process noise covariance, smaller value for stability
         self.R            = self.sigma2 * np.eye(self.m) # Measurement noise covariance, R= σ^2 * I_m
         self.is_fitted_   = True
         return self
@@ -156,7 +156,7 @@ class KAMP(BaseEstimator):
         """
         P_AT   = P_ @ self.AT                             # shape(n, m)
         matrix = self.A @ P_AT + R
-        epsilon = 1e-6  # Small regularization to stabilize inverse
+        epsilon = 1e-6 *np.linalg.norm(matrix, ord=2)  # Small regularization to stabilize inverse
         matrix_reg = matrix + epsilon * np.eye(matrix.shape[0])
         # Use Cholesky decomposition for stable and fast inversion of PD matrix
         try:
@@ -185,7 +185,8 @@ class KAMP(BaseEstimator):
         x_clipped = np.clip(x_, -1e10, 1e10)
         result = self.y - self.A @ x_clipped
         # Handle potential NaN/inf values
-        result = np.nan_to_num(result, nan=0.0, posinf=1e10, neginf=-1e10)
+        if np.any(np.isnan(result)) or np.any(np.isinf(result)):
+            result = np.nan_to_num(result, nan=0.0, posinf=1e10, neginf=-1e10)
         return result
 
     def __update_estimation(self, x_: NDArray, G: NDArray, r_: NDArray) -> NDArray:
@@ -250,7 +251,8 @@ class KAMP(BaseEstimator):
         z_clipped = np.clip(z_prev, -1e10, 1e10)
         result = x_clipped + self.AT @ z_clipped
         # Handle potential NaN/inf values
-        result = np.nan_to_num(result, nan=0.0, posinf=1e10, neginf=-1e10)
+        if np.any(np.isnan(result)) or np.any(np.isinf(result)):
+            result = np.nan_to_num(result, nan=0.0, posinf=1e10, neginf=-1e10)
         return result
     
     @property
@@ -271,8 +273,6 @@ class KAMP(BaseEstimator):
         """
         check_is_fitted(self, "is_fitted_")
         for _ in (des:=tqdm(range(self.max_iter),ascii=True, leave=False,colour='blue')):#range(self.max_iter):
-            
-            #--------------------------Prediction phase(Thresholding phase)------------------------------
             des.set_description(f'\33[31m[Thresholding phase]\33[33m')
             
             x_prev = np.copy(self.x) # Store previous estimate,                                   x̂_{[t-1]}
@@ -281,7 +281,6 @@ class KAMP(BaseEstimator):
             J      = self.__update_jacobian(r) # Compute Jacobian,                                 J_η          = diag(η'(r)) * (I_n - A^T * A)
             P_     = self.__update_prior_covariance(J, self._P, self.Q) # Update prior covariance, P_{[t]}^{-}  = J_η * P_{[t-1]} * J_η^T + Q_{[t-1]}
             
-            #--------------------------Correction phase(Correction phase)------------------------------
             des.set_description(f'\33[32m[Correction]\33[33m')
             
             G       = self.__update_kalman_gain(P_, self.R) # Compute Kalman gain,          G_{[t]}     = P_{[t]}^{-} * A^T * (A * P_{[t]}^{-} * A^T + R)^{-1}
