@@ -30,23 +30,22 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-def generate_synthetic_data(num_samples=900, num_features=70, sparsity=0.1, noise_std=0.1, random_state=42, shape=None):
+def generate_synthetic_data(num_samples=900, num_features=70, sparsity=0.1, noise_std=0.1, random_state=42, is_2d=False, shape_2d=(10, 7)):
     """
     Generate synthetic data for sparse signal recovery.
-    If shape is provided and len(shape) > 1, generate multi-dimensional sparse data.
+    If is_2d=True, generate 2D sparse data with shape_2d.
+    If is_2d=False, generate 1D sparse data with num_features.
     """
     rng = np.random.RandomState(random_state)
-    if shape is not None and len(shape) > 1:
-        # Multi-dimensional sparse signal
-        x_true = rng.randn(*shape)
-        mask = rng.rand(*shape) < sparsity
+    if is_2d:
+        # 2D sparse signal
+        x_true = rng.randn(*shape_2d)
+        mask = rng.rand(*shape_2d) < sparsity
         x_true[~mask] = 0
         x_true_flat = x_true.flatten()
         num_features = x_true_flat.shape[0]
     else:
-        # 1D sparse signal
-        if shape is not None:
-            num_features = shape[0]
+        # 1D sparse signal (Complex data)
         x_true = rng.randn(num_features)
         mask = rng.rand(num_features) < sparsity
         x_true[~mask] = 0
@@ -60,7 +59,7 @@ def generate_synthetic_data(num_samples=900, num_features=70, sparsity=0.1, nois
     y = A @ x_true_flat + noise
     return A, y, x_true_flat, x_true
 
-def grid_search_hyperparameters(A, y, x_true_flat, G, param_grids, shape=None, x_true=None, random_state=42):
+def grid_search_hyperparameters(A, y, x_true_flat, G, param_grids, is_2d=False, x_true_2d=None, random_state=42):
     """
     Perform grid search over hyperparameters for DistributedKAMP.
 
@@ -147,15 +146,15 @@ def grid_search_hyperparameters(A, y, x_true_flat, G, param_grids, shape=None, x
                 print(f"Warning: Error computing consensus error for params {param_dict}: {e}")
                 consensus_error = np.nan
 
-            # Image quality metrics (for multi-dimensional case)
+            # Image quality metrics (for 2D case)
             image_metrics = {}
-            if shape is not None and len(shape) > 1 and x_true is not None:
+            if is_2d and x_true_2d is not None:
                 try:
-                    x_est_reshaped = x_est.reshape(x_true.shape)
-                    image_metrics['ssim'] = calculate_ssim(x_true, x_est_reshaped)
-                    image_metrics['gmsd'] = calculate_gmsd(x_true, x_est_reshaped)
-                    image_metrics['fsim'] = calculate_fsim(x_true, x_est_reshaped)
-                    image_metrics['vif'] = calculate_vif(x_true, x_est_reshaped)
+                    x_est_2d = x_est.reshape(x_true_2d.shape)
+                    image_metrics['ssim'] = calculate_ssim(x_true_2d, x_est_2d)
+                    image_metrics['gmsd'] = calculate_gmsd(x_true_2d, x_est_2d)
+                    image_metrics['fsim'] = calculate_fsim(x_true_2d, x_est_2d)
+                    image_metrics['vif'] = calculate_vif(x_true_2d, x_est_2d)
                 except Exception as e:
                     logging.error(f"Error computing image metrics for params {param_dict}: {e}")
                     print(f"Warning: Error computing image metrics for params {param_dict}: {e}")
@@ -185,12 +184,12 @@ def grid_search_hyperparameters(A, y, x_true_flat, G, param_grids, shape=None, x
 
     # Metrics to minimize
     minimize_metrics = ['nmse_global', 'mse_global', 'rmse_global', 'consensus_error', 'fit_time']
-    if shape is not None and len(shape) > 1:
+    if is_2d:
         minimize_metrics.append('gmsd')
 
     # Metrics to maximize
     maximize_metrics = ['snr_global', 'peak_snr_global']
-    if shape is not None and len(shape) > 1:
+    if is_2d:
         maximize_metrics.extend(['ssim', 'fsim', 'vif'])
 
     for metric in minimize_metrics:
@@ -234,13 +233,14 @@ def main():
 
     print(f"Found {len(adj_files)} adjacency files")
 
-    # Define parameter grids for grid search
+    # Define small parameter grids for grid search (reduced combinations for efficiency)
     param_grids = {
-        'alpha': [0.1, 0.3, 0.5, 0.7, 0.9],
-        'tau': [0.01, 0.05, 0.1, 0.2, 0.5],
-        'node_max_iter': [10, 20, 50, 100],
-        'num_triggers': [50, 100, 200, 500]
+        'alpha': [0.1, 0.5, 0.9],  # 3 values instead of 5
+        'tau': [0.01, 0.1, 0.5],   # 3 values instead of 5
+        'node_max_iter': [10, 50],  # 2 values instead of 4
+        'num_triggers': [50, 200]   # 2 values instead of 4
     }
+    # Total combinations: 3 * 3 * 2 * 2 = 36 (much smaller than original 400)
 
     # Load first topology for grid search
     try:
@@ -258,25 +258,26 @@ def main():
         print(f"Warning: Error loading first topology for grid search: {e}")
         return
 
-    # Loop over 1D and 2D data
-    for shape in [None, (10, 7)]:
+    # Loop over 2D and Complex data
+    for is_2d in [True, False]:
         # Define data_type early to avoid UnboundLocalError in exception handlers
-        data_type = f"{len(shape)}d" if shape else '1d'
+        data_type = '2d' if is_2d else 'Complex'
 
         print(f"\n{'='*50}")
-        print(f"Testing with {'2D' if shape else '1D'} synthetic data")
+        print(f"Testing with {'2D' if is_2d else 'Complex'} synthetic data")
         print(f"{'='*50}")
 
         try:
             num_samples = 900
-            if shape:
-                num_features = np.prod(shape)
-                A, y, x_true_flat, x_true = generate_synthetic_data(num_samples=num_samples, num_features=num_features, shape=shape)
-                print(f"Generated {len(shape)}D synthetic data: {A.shape[0]} samples, {A.shape[1]} features ({'x'.join(map(str, shape))})")
+            if is_2d:
+                num_features = 2
+                shape_2d = (1, num_features)  # This creates 2D signal but measurement matrix is 900×2
+                A, y, x_true_flat, x_true_2d = generate_synthetic_data(num_samples=num_samples, num_features=num_features, is_2d=is_2d, shape_2d=shape_2d)
+                print(f"Generated 2D synthetic data: {A.shape[0]} samples, {A.shape[1]} features (measurement matrix {A.shape[0]}×{A.shape[1]})")
             else:
                 num_features = 70
-                A, y, x_true_flat, x_true = generate_synthetic_data(num_samples=num_samples, num_features=num_features, shape=shape)
-                print(f"Generated 1D synthetic data: {A.shape[0]} samples, {A.shape[1]} features")
+                A, y, x_true_flat, x_true_2d = generate_synthetic_data(num_samples=num_samples, num_features=num_features, is_2d=is_2d)
+                print(f"Generated Complex synthetic data: {A.shape[0]} samples, {A.shape[1]} features (measurement matrix {A.shape[0]}×{A.shape[1]})")
         except Exception as e:
             logging.error(f"Error generating synthetic data for {data_type}: {e}")
             print(f"Warning: Error generating synthetic data for {data_type}: {e}")
@@ -288,7 +289,7 @@ def main():
         # Perform grid search for hyperparameter optimization
         try:
             print(f"Performing grid search for {data_type} data...")
-            best_params = grid_search_hyperparameters(A, y, x_true_flat, first_G, param_grids, shape=shape, x_true=x_true, random_state=42)
+            best_params = grid_search_hyperparameters(A, y, x_true_flat, first_G, param_grids, is_2d=is_2d, x_true_2d=x_true_2d, random_state=42)
             optimal_params = best_params['nmse_global']  # Use best for NMSE as primary metric
             print(f"Optimal parameters for {data_type}: {optimal_params}")
 
@@ -370,18 +371,18 @@ def main():
 
             # Plot original vs reconstructed
             try:
-                if shape and len(shape) > 1:
-                    # For multi-dimensional data: use imshow for comparison
-                    x_est_reshaped = x_est.reshape(shape)
+                if is_2d and x_true_2d is not None:
+                    # For 2D data: use imshow for comparison (measurement matrix 900×2)
+                    x_est_2d = x_est.reshape(x_true_2d.shape)
                     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-                    im1 = axes[0].imshow(x_true, cmap='viridis', aspect='auto')
+                    im1 = axes[0].imshow(x_true_2d, cmap='viridis', aspect='auto')
                     axes[0].set_title('Original Signal')
                     plt.colorbar(im1, ax=axes[0], label='Value')
-                    im2 = axes[1].imshow(x_est_reshaped, cmap='viridis', aspect='auto')
+                    im2 = axes[1].imshow(x_est_2d, cmap='viridis', aspect='auto')
                     axes[1].set_title('Reconstructed Signal')
                     plt.colorbar(im2, ax=axes[1], label='Value')
                 else:
-                    # For 1D data: create comprehensive visualization
+                    # For Complex data: create comprehensive visualization (measurement matrix 900×70)
                     fig = plt.figure(figsize=(15, 10))
 
                     # Subplot 1: Measurement matrix A
