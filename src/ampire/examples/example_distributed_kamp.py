@@ -1,10 +1,15 @@
+import sys
 import numpy as np
-from ..distributed.distributed_kamp import DistributedKAMP
-from ..network.graph import MyGraph, Node
-from ..core.kamp import KAMP
-import yaml
 from pathlib import Path
-from ..network.topology_generators import (
+
+# Add the src directory to sys.path to enable imports from the ampire package
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'src'))
+
+from ampire.distributed.distributed_kamp import DistributedKAMP
+from ampire.network.graph import MyGraph, Node
+from ampire.core.kamp import KAMP
+import yaml
+from ampire.network.topology_generators import (
     create_dag, create_directed_with_cycles, create_directed_with_cycles_and_loops,
     create_star_with_extra_edges, create_leafs_to_final_node, create_tree_with_leaf_connections,
     create_bidirectional
@@ -62,22 +67,16 @@ def main():
             A_list, y_list, x_true = create_synthetic_data(num_nodes=num_nodes, n=10, m=m)
             # create graph using topology
             rng = np.random.RandomState(42)
-            graph_nx = get_graph(topo, num_nodes, rng)
-            # since DistributedKAMP expects a MyGraph, we can convert:
-            G = MyGraph()
-            G.add_nodes_from(graph_nx.nodes())
-            for u, v in graph_nx.edges():
-                # assign placeholder weight, will be randomized internally
-                G.add_edge(u, v, weight=1.0)
+            graph = get_graph(topo, num_nodes, rng)
             dkamp = DistributedKAMP(alpha=0.5, tau=0.1,
-                                    node_max_iter=10,
-                                    num_triggers=20,
-                                    graph=G,
-                                    A_list=A_list,
-                                    y_list=y_list,
-                                    random_state=42,
-                                    verbose=False,
-                                    record_history=True)
+                            node_max_iter=10,
+                            num_triggers=20,
+                            graph=graph,
+                            A_list=A_list,
+                            y_list=y_list,
+                            random_state=42,
+                            verbose=False,
+                            record_history=True)
             dkamp.fit()
             # save per-trigger history
             history_file = f"logs/{topo['name']}_nodes{num_nodes}_history.json"
@@ -92,7 +91,7 @@ def main():
             # save adjacency matrix
             adj_path = f"adjacency/{topo['name']}_nodes{num_nodes}.npy"
             Path('adjacency').mkdir(exist_ok=True)
-            np.save(adj_path, G.get_adjacency_matrix())
+            np.save(adj_path, graph.get_adjacency_matrix())
             # compute summary metrics
             report = dkamp.report()
             results.append({
