@@ -90,7 +90,7 @@ class AMP(BaseEstimator):
             z = self.y - self.A @ x + self.alpha * onsager_term
             # Check for convergence
             diff_norm = np.linalg.norm(x - x_prev)
-            prev_norm = np.linalg.norm(x_prev)
+            prev_norm = np.linalg.norm(x_prev) + 1e-8
             if prev_norm > 0 and diff_norm / prev_norm < self.tol:
                 break
             # Check for NaN/inf values
