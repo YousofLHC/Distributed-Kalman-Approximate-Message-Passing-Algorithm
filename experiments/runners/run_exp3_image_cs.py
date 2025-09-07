@@ -129,6 +129,12 @@ def run_experiment():
                 'ssim': ssim
             })
 
+            # Save results immediately after each experiment
+            df_temp = pd.DataFrame(results)
+            temp_csv_path = 'experiments/results/exp3_image_cs/exp3_results_partial.csv'
+            os.makedirs(os.path.dirname(temp_csv_path), exist_ok=True)
+            df_temp.to_csv(temp_csv_path, index=False)
+
     return results
 
 def main():
