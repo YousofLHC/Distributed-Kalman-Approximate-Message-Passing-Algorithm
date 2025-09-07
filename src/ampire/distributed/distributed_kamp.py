@@ -6,11 +6,10 @@ from typing import List, Dict, Tuple, Union
 from ampire.core.kamp import KAMP
 from ampire.network.graph import MyGraph, Node
 from ampire.network.random_digraphs import create_strongly_connected_graph
-
 class DistributedKAMP(KAMP):
     """
     Distributed Kalman Approximate Message Passing (DKAMP) for sparse signal recovery
-    on a directed acyclic graph (DAG) with per-node measurement matrices and a shared unknown vector.
+    on a directed graph with per-node measurement matrices and a shared unknown vector.
     Inherits from KAMP to reuse single-node functionality.
     """
     def __init__(self, alpha: float, tau: float, node_max_iter: Union[int, List[int]],
@@ -26,7 +25,7 @@ class DistributedKAMP(KAMP):
             tau: Threshold for soft thresholding.
             node_max_iter: Maximum iterations for each node's KAMP algorithm (int or list of ints).
             num_triggers: Number of random node triggers.
-            graph: MyGraph representing the graph, determines number of nodes.
+            graph: NetworkX DiGraph representing the graph, determines number of nodes.
             A_list: List of measurement matrices [A_1, ..., A_N].
             y_list: List of observation vectors [y_1, ..., y_N].
             random_state: Random seed for reproducibility.
@@ -96,7 +95,7 @@ class DistributedKAMP(KAMP):
             Node(estimator=KAMP(alpha=alpha, tau=tau, max_iter=max_iter), name=str(i))
             for i, max_iter in enumerate(self.node_max_iter)
         ]
-        self.my_graph = MyGraph(verbose=False)
+        self.my_graph = MyGraph(verbose=verbose)
         self._initialize_graph()
 
     def _initialize_graph(self):
@@ -104,36 +103,45 @@ class DistributedKAMP(KAMP):
         # Fit each node with its data subset
         for i, node in enumerate(self.node_estimators):
             node.fit(self.A_list[i], self.y_list[i])
+            # Initial local solve to have non-zero estimates
+            node.solve()
         # Add all nodes to the graph
         for node in self.node_estimators:
             self.my_graph.add_node(node, x=node.x, P=node.P)
-        # Create edges with initialized x
+        # Create edges without storing stale x on edge data
         for u, v in self.graph.edges():
             weight = np.clip(self.rng.normal(loc=0.5, scale=0.1), 0, 1)
             self.my_graph.add_edge(
                 self.node_estimators[u],
                 self.node_estimators[v],
-                x=self.node_estimators[u].x,
                 weight=weight
             )
 
     def fit(self):
         """Run distributed KAMP with random node triggering."""
-        # Perform random node triggering
-        for _ in range(self.num_triggers):
-            selected_node = self.rng.choice(self.node_estimators)
+        # For DAGs, use topological order if specified
+        if self.just_dag:
+            trigger_order = list(nx.topological_sort(self.graph))
+            trigger_nodes = [self.node_estimators[i] for i in trigger_order]
+            # Repeat the order multiple times for multiple passes
+            trigger_sequence = trigger_nodes * (self.num_triggers // self.num_nodes + 1)
+            self.rng.shuffle(trigger_sequence)  # Optional shuffle for variety
+        else:
+            trigger_sequence = self.rng.choice(self.node_estimators, size=self.num_triggers, replace=True)
+        
+        for selected_node in trigger_sequence:
             self.my_graph.trigger(selected_node, inplace=True)
             if self.record_history:
-                # after each trigger, compute consensus error
                 x_global = self.solve()
                 node_estimates = [node.x for node in self.node_estimators]
                 consensus_error = np.var([np.linalg.norm(x - x_global) for x in node_estimates])
                 self.history.append(consensus_error)
-        # final update
-        # Update local estimates based on graph messages
+        
+        # Final aggregation for all nodes
         for node in self.node_estimators:
             self.my_graph.total_in_degree(node, inplace=True)
         return self
+
     def save_history(self, filepath: str):
         import json
         with open(filepath, 'w') as f:
@@ -190,7 +198,7 @@ class DistributedKAMP(KAMP):
             tau: Threshold
             num_triggers: Number of random triggers
             random_state: Random seed
-            just_dag: If True, enforce that graph must be a DAG. If False, allow any directed graph. Default is False.
+            just_dag: If True, enforce that graph must be a DAG.
 
         Returns:
             DistributedKAMP instance
@@ -201,21 +209,21 @@ class DistributedKAMP(KAMP):
         y_list = [data[node][1] for node in nodes]
 
         # Create graph based on topology
+        rng = np.random.RandomState(random_state)
         if topology == 'dag':
-            graph = cls.create_dag(num_nodes, random_state=random_state)
+            graph = create_dag(num_nodes, rng=rng)
         elif topology == 'cycle':
-            graph = MyGraph()
+            graph = nx.DiGraph()
             graph.add_nodes_from(range(num_nodes))
             for i in range(num_nodes):
                 graph.add_edge(i, (i + 1) % num_nodes)
         elif topology == 'selfloop':
-            graph = MyGraph()
+            graph = nx.DiGraph()
             graph.add_nodes_from(range(num_nodes))
             for i in range(num_nodes):
                 graph.add_edge(i, i)
         elif topology == 'mixed':
-            graph = cls.create_dag(num_nodes, random_state=random_state)
-            # Add some cycles or self-loops if needed
+            graph = create_strongly_connected_graph(num_nodes, rng=rng)
         else:
             raise ValueError(f"Unknown topology: {topology}")
 
@@ -235,7 +243,7 @@ class DistributedKAMP(KAMP):
         node_estimates = self.get_node_estimates()
         consensus_error = np.var([np.linalg.norm(x - x_global) for x in node_estimates])
 
-        # NMSE global (assuming true signal is x_global for simplicity)
+        # NMSE global (placeholder; requires true x for real NMSE)
         nmse_global = 0.0  # Placeholder
 
         # Bytes: rough estimate
@@ -249,7 +257,7 @@ class DistributedKAMP(KAMP):
         }
 
     @staticmethod
-    def create_dag(num_nodes: int, edge_prob: float = 0.9, random_state: int = None) -> MyGraph:
+    def create_dag(num_nodes: int, edge_prob: float = 0.9, random_state: int = None) -> nx.DiGraph:
         """
         Create a random DAG for distributed KAMP.
 
@@ -259,10 +267,10 @@ class DistributedKAMP(KAMP):
             random_state: Random seed for reproducibility.
 
         Returns:
-            MyGraph: Directed acyclic graph.
+            nx.DiGraph: Directed acyclic graph.
         """
         rng = np.random.RandomState(random_state)
-        G = MyGraph()
+        G = nx.DiGraph()
         G.add_nodes_from(range(num_nodes))
         for i in range(num_nodes):
             for j in range(i + 1, num_nodes):
