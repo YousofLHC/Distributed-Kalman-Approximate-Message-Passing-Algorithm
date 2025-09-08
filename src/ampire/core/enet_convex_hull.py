@@ -178,66 +178,43 @@ class EnetConvexHull(BaseEstimator, OutlierMixin):
         if not isinstance(self.thr, (int, float)) or self.thr <= 0:
             raise ValueError(f"thr ({self.thr}) must be a positive float.")
 
-    def _validate_kernel_params(self):
-        """
-        Validate kernel-specific parameters based on the selected kernel metric.
-
-        Raises
-        ------
-        ValueError
-            If any kernel parameter is invalid or missing for the selected metric.
-        """
-        # Check if metric is specified
+    def _validate_kernel_params(self, X=None):
+        """Validate and adjust kernel-specific parameters."""
         if self.metric is None:
             raise ValueError("The kernel metric must be specified.")
-
-        # Validate gamma
         if self.metric in {'poly', 'rbf', 'sigmoid'}:
             gamma = self.kernel_params.get('gamma', 'scale')
-            if not (isinstance(gamma, (int, float)) or gamma in {'scale', 'auto'}):
-                raise ValueError(f"Invalid gamma value: {gamma}. It must be 'scale', 'auto', or a positive number.")
-
-        # Validate degree for poly kernel
+            if X is not None and isinstance(gamma, str):
+                if gamma == 'scale':
+                    n_features = X.shape[1]
+                    self.kernel_params['gamma'] = 1.0 / (n_features * X.var()) if X.var() > 0 else 1.0
+                elif gamma == 'auto':
+                    self.kernel_params['gamma'] = 1.0 / X.shape[1]
+                else:
+                    raise ValueError(f"Invalid gamma value: {gamma}. Must be 'scale', 'auto', or a number.")
+            elif not isinstance(gamma, (int, float)):
+                raise ValueError(f"Invalid gamma value: {gamma}. Must be a number after validation.")
         if self.metric == 'poly':
             degree = self.kernel_params.get('degree', None)
-            if degree is None:
-                raise ValueError("Invalid degree. The 'degree' parameter is required for the 'poly' kernel.")
-            if not isinstance(degree, int) or degree <= 0:
-                raise ValueError(f"Invalid degree value: {degree}. It must be a positive integer.")
-
-
-        # Validate coef0 for poly and sigmoid kernels
+            if degree is None or not isinstance(degree, int) or degree <= 0:
+                raise ValueError(f"Invalid degree value: {degree}. Must be a positive integer.")
         if self.metric in {'poly', 'sigmoid'}:
             coef0 = self.kernel_params.get('coef0', None)
             if coef0 is not None and not isinstance(coef0, (int, float)):
-                raise ValueError(f"Invalid coef0 value: {coef0}. It must be a number.")
-
-        # Additional kernel-specific validations can be added here as needed
-
+                raise ValueError(f"Invalid coef0 value: {coef0}. Must be a number.")
 
     def _adjust_kernel(self, X, Y=None):
-        """
-        Compute the adjusted pairwise kernel similarity matrix.
-
-        Parameters
-        ----------
-        X : ndarray of shape (n_samples_X, n_features)
-            Inpud data for the first set.
-        Y : ndarray of shape (n_samples_Y, n_features)
-            Input data for the second set. If None, Y is set to X.
-
-        Returns
-        -------
-        adjusted_kernel : ndarray of shape (n_samples_X, n_samples_Y)
-            Adjusted pairwise kernel similarity matrix.
-        """
+        """Compute adjusted pairwise kernel similarity matrix."""
         if Y is None:
             Y = X
-        G = pairwise_kernels(X, Y, metric=self.metric, **self.kernel_params)
+        # Create a copy of kernel_params to modify gamma if needed
+        kernel_params = self.kernel_params.copy()
+        G = pairwise_kernels(X, Y, metric=self.metric, **kernel_params)
         G_sum = G.sum()
         row_sum = G.sum(axis=1, keepdims=True)
         col_sum = G.sum(axis=0, keepdims=True)
-        return G -(row_sum+col_sum)/X.shape[0] + G_sum / (X.shape[0]**2)
+        return G - (row_sum + col_sum) / X.shape[0] + G_sum / (X.shape[0] ** 2)
+    
     def _calculate_P(self, X):
             BTB = self._adjust_kernel(X)
             P   = (self.landa2 * np.identity(X.shape[0])) + BTB
@@ -259,10 +236,9 @@ class EnetConvexHull(BaseEstimator, OutlierMixin):
         self : object 
             Fitted instance of the model.
         """
-
         # Validate parameters and inputs
         self._validate_params()
-        self._validate_kernel_params()  # Validate kernel parameters
+        self._validate_kernel_params(X=X)  # Pass X to compute gamma if needed
         if y is not None:
             X, y     = check_X_y(X, y, accept_sparse=False, ensure_2d=True, dtype=np.float64)
             self.return_label = True
