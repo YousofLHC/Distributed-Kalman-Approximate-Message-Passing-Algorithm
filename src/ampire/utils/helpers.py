@@ -36,6 +36,58 @@ def generate_synthetic_data(num_samples, num_features, sparsity, noise_std, rand
     y = A @ x_true_flat + noise
     return A, y, x_true_flat, x_true
 
+
+def create_measurement_matrix(m, n, matrix_type, random_state=None):
+    """
+    Generate a measurement matrix of specified type and dimensions.
+
+    Parameters
+    ----------
+    m : int
+        Number of measurements (rows of the matrix).
+    n : int
+        Number of features (columns of the matrix).
+    matrix_type : str
+        Type of measurement matrix to generate. Options are:
+        - 'gaussian': Gaussian random matrix with entries ~ N(0, 1/m).
+        - 'heavy': Heavy-tailed random matrix with entries from a t-distribution (df=2) scaled by 1/sqrt(m).
+        - 'orthogonal': Orthogonal matrix derived from QR decomposition, with m rows randomly selected and scaled.
+    random_state : int or None, optional
+        Seed for the random number generator to ensure reproducibility. Default is None.
+
+    Returns
+    -------
+    ndarray
+        Measurement matrix of shape (m, n).
+
+    Raises
+    ------
+    ValueError
+        If matrix_type is not one of 'gaussian', 'heavy', or 'orthogonal'.
+        If m or n is not a positive integer.
+        If m > n for orthogonal matrix type (since orthogonal requires selecting m rows from n).
+    """
+    if not isinstance(m, int) or m <= 0:
+        raise ValueError("Number of measurements (m) must be a positive integer.")
+    if not isinstance(n, int) or n <= 0:
+        raise ValueError("Number of features (n) must be a positive integer.")
+    
+    rng = np.random.default_rng(random_state)
+
+    if matrix_type == "gaussian":
+        return rng.randn(m, n) / np.sqrt(m)
+    elif matrix_type == "heavy":
+        return rng.standard_t(df=2, size=(m, n)) / np.sqrt(m)
+    elif matrix_type == "orthogonal":
+        if m > n:
+            raise ValueError("For orthogonal matrix type, m must be less than or equal to n.")
+        B = rng.randn(n, n)
+        Q, _ = np.linalg.qr(B)
+        idx = rng.choice(n, size=m, replace=False)
+        return Q[idx, :] * np.sqrt(n / m)
+    else:
+        raise ValueError("Unknown matrix type. Choose from 'gaussian', 'heavy', or 'orthogonal'.")
+
 def load_graph(adj_file):
     """Load graph from adjacency matrix file."""
     try:
