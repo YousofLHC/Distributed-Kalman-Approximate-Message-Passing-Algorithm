@@ -6,6 +6,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from itertools import product
+import sys
+sys.path.insert(0,'src')
 from ampire.core.amp import AMP
 from ampire.core.kamp import KAMP
 from ampire.utils.metrics import calculate_compressive_sensing_metrics
