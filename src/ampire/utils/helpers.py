@@ -131,3 +131,125 @@ def save_plot(fig, filepath, title, xlabel, ylabel, log_scale=False):
         plt.yscale('log')
     plt.savefig(filepath, bbox_inches='tight')
     plt.close()
+    
+    
+    
+from   pathlib               import Path # to create directory
+import numpy                 as     np
+from   sklearn.base          import TransformerMixin
+from   sklearn               import preprocessing
+from   sklearn               import model_selection
+from   pathlib               import Path
+import os
+import __main__ as main
+#from   sklearn.preprocessing import *
+import re
+import pickle
+import itertools
+from itertools import pairwise
+def find_almost_boundaries(z,quantile):
+    #remove quantile*z, the rests are near boundary z
+    val = np.quantile(z,quantile) 
+    count, edges = np.histogram(z)
+    
+    bin = next(((edges[i-1],edges[-1]) for i,edge in enumerate(edges) if edge>val),None)# select 1-quantile of data
+    lower, upper = bin
+    mask = (np.logical_and(z>=lower, z<upper).flatten())
+    return mask
+
+def write_report(obj, path):
+    #suffix = '-poly' if 'poly' in main.__file__ else ''
+    empty = []
+    
+    suffix = re.findall(pattern="run_(.*?).py", string=main.__file__)
+    suffix = "" if suffix==empty else '_'+suffix[0]
+
+    with open(f'{path}{suffix}.pkl','wb') as f:
+        pickle.dump(obj=obj, file=f, protocol=pickle.HIGHEST_PROTOCOL)
+
+def extract_directory_name_from_file_path(file_path:str, path_seprator:str='/'):
+    path           = file_path.split('.')[-2]
+    directory_name = path.split(path_seprator)[-1]
+    return directory_name
+
+def create_directory(directory:str, des:str='Results/'):
+    dir_path = os.path.join(des, directory)
+    return Path(dir_path).mkdir(parents=True, exist_ok=True)
+
+def create_report_file(directory:str, file:str, des:str='results/')->Path:
+    file_path = os.path.join(des, directory, file)
+    Path(file_path).touch(exist_ok=True)
+    return file_path
+
+
+def make_inlier_outlier_label(
+                                    labels:np.ndarray[int],
+                                    inlier:int=0,
+                                    target:int=+1
+                                )->np.ndarray[int]:
+    """
+    Returns binary class of labels target(inlier)(+1), non-target(-1)
+    if target=0, output labels is 0 for targets and +1 for non-targets(anomalies)
+    
+    Parameters
+    -----------
+        labels   : np.ndarray[int]
+            1-D array of (binary/~multi~) class labels
+        inlier : int 
+            inlier label (class) in labels array
+        target   : int
+            convert inlier labels to target
+            (default is +1)
+    
+    Returns
+    ----------
+        np.ndarray[int]
+        binary class labels target(+1), non-target(-1)
+    """
+    output         = np.zeros(shape=labels.shape, dtype=int)
+    mask           = labels==inlier
+    target_is_zero = target==0
+    output[~mask]  = +1 if target_is_zero else -target #non-targets
+    output[mask]   = target
+    return output
+
+
+def preprocess(scaler:TransformerMixin,data:np.ndarray, *args, **kwargs):
+    transformer_class_name = scaler.__qualname__
+    
+    transformer_object     = getattr(preprocessing,transformer_class_name)(*args, **kwargs)
+
+    return transformer_object.fit_transform(data)
+
+def train_test_split(
+                        X:np.ndarray,
+                        y:np.ndarray,
+                        target:int=+1,
+                        *args,
+                        **kwargs,
+                    )-> tuple[np.ndarray,np.ndarray,np.ndarray,np.ndarray]:
+    mask_target  = y==target
+    mask_target  = mask_target.flatten()
+    X_target     = X[mask_target,:]
+    X_non_target = X[~mask_target,:]
+
+    X_train, X_test, y_train, y_test = model_selection.train_test_split(
+                                        X_target,
+                                        y[mask_target],
+                                        *args,
+                                        **kwargs,
+                                        )
+    X_test = np.concatenate((X_non_target, X_test))
+    y_test = np.concatenate((y[~mask_target],y_test))
+
+    return X_train, X_test, y_train, y_test
+    
+    
+
+def parameter_permutation(params): #params Dict[List]
+    keys, values = zip(*params.items())
+    permutation  = [
+        dict(zip(keys, v))
+        for v in itertools.product(*values)
+    ]
+    return permutation # List[Dict]
