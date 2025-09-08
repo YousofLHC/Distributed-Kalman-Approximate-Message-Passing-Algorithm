@@ -68,38 +68,32 @@ class DistThresholdFinder:
 
         return A_list, y_list, scale_A * scale_y
 
-    def find(self, outs='max'):
+
+    def find(self, outs='max', specific_index=None):
         """
-        Compute z-values for each sample by removing it and using DistributedKAMP.
+        Find anomaly scores for training samples using leave-one-out cross-validation.
 
-        Parameters
-        ----------
-        outs : str or list of str (default='max')
-            Aggregation method(s) for z-values ('max', 'min', 'mean', etc.).
+        Parameters:
+        - outs: str or tuple of str, aggregation method(s) for z-scores (e.g., 'max', 'mean')
+        - specific_index: int, optional, compute score for a single sample index
 
-        Returns
-        -------
-        z : ndarray of shape (n_samples, 1)
-            z-values for each sample.
-        result : float or tuple
-            Aggregated z-value(s) based on outs.
+        Returns:
+        - z: array, anomaly scores for all samples
+        - aggregated z: max, mean, or tuple of aggregated scores
         """
         z = np.zeros((self.n, 1))
-        for row, x in (tqz := tqdm(enumerate(self.X), leave=False, total=self.n, desc="Calculating z")):
-            tqz.set_description(f'z[{row}]')
+        indices = [specific_index] if specific_index is not None else range(self.n)
+
+        for row in tqdm(indices, leave=False, total=len(indices), desc="Calculating z"):
+            logging.info(f"Processing sample {row}/{len(indices)}")
             eliminated_X = np.delete(self.XCopy, row, axis=0)
-            # Validate kernel parameters for eliminated_X
             self.model._validate_kernel_params(X=eliminated_X)
             G = pairwise_kernels(eliminated_X, metric=self.model.metric, **self.model.kernel_params)
             P = self.model._calculate_P(eliminated_X)
-            Ky = pairwise_kernels(eliminated_X, x.reshape((1, self.m)),
+            Ky = pairwise_kernels(eliminated_X, self.X[row].reshape((1, self.m)),
                                   metric=self.model.metric, **self.model.kernel_params)
             q = self.model._calculate_q(G, Ky)
-
-            # Convert QP to KAMP format
             A_list, y_list, scale = self._convert_qp_to_kamp(P, q)
-
-            # Initialize DistributedKAMP
             dk = DistributedKAMP(
                 alpha=self.model.alpha,
                 tau=self.model.tau,
@@ -112,19 +106,17 @@ class DistThresholdFinder:
                 just_dag=self.model.just_dag,
                 verbose=self.model.verbose
             )
-
-            # Fit and solve
             dk.fit()
             x_opt = dk.solve()
-
-            # Rescale and apply lower bound
             x_opt = x_opt * scale
             x_opt = np.maximum(x_opt, self.lb)
-
-            # Compute z-value
             z[row, 0] = self.model.landa1 * np.sum(x_opt) + self.model.landa2 * np.linalg.norm(x_opt)
             logging.debug(f"z[{row}]={z[row, 0]:.4f}, x_opt_norm={np.linalg.norm(x_opt):.2e}")
 
+        if specific_index is not None:
+            return z[specific_index, 0], z[specific_index, 0]
+
         if isinstance(outs, str):
             return z, getattr(np, outs)(z)
-        return z, tuple(getattr(np, func)(z) for func in outs)
+        return z, tuple(getattr(np, outs)(z) for func in outs)
+   
