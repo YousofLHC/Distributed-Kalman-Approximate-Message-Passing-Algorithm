@@ -17,7 +17,7 @@ class DistThresholdFinder:
     model : DistEnetConvexHull
         The fitted DistEnetConvexHull model.
     X : ndarray of shape (n_samples, n_features)
-        Training data.
+        Training data (inliers only, provided as model.X_target).
     """
     def __init__(self, model, X):
         if not isinstance(model, DistEnetConvexHull):
@@ -25,11 +25,10 @@ class DistThresholdFinder:
         if not hasattr(model, "is_fitted_"):
             raise ValueError("Model is not fitted yet. Call `fit` on the model first.")
         self.model = model
-        self.X = X
-        self.XCopy = deepcopy(X)
-        self.n, self.m = X.shape
-        self.lb = np.zeros((self.n - 1, 1)) if model.lb is None else model.lb[:-1, :]
-        
+        self.X = model.X_target  # Use inliers only
+        self.XCopy = deepcopy(model.X_target)  # Deep copy inliers
+        self.n, self.m = model.X_target.shape  # Shape based on inliers
+        self.lb = np.zeros((self.n - 1, 1)) if model.lb is None else model.lb[:-1, :]  # Lower bound for inliers
         # Setup logging
         log_dir = 'logs'
         os.makedirs(log_dir, exist_ok=True)
@@ -68,23 +67,14 @@ class DistThresholdFinder:
 
         return A_list, y_list, scale_A * scale_y
 
-
     def find(self, outs='max', specific_index=None):
-        """
-        Find anomaly scores for training samples using leave-one-out cross-validation.
-
-        Parameters:
-        - outs: str or tuple of str, aggregation method(s) for z-scores (e.g., 'max', 'mean')
-        - specific_index: int, optional, compute score for a single sample index
-
-        Returns:
-        - z: array, anomaly scores for all samples
-        - aggregated z: max, mean, or tuple of aggregated scores
-        """
         z = np.zeros((self.n, 1))
         indices = [specific_index] if specific_index is not None else range(self.n)
-
+    
         for row in tqdm(indices, leave=False, total=len(indices), desc="Calculating z"):
+            if row >= self.n:
+                logging.warning(f"Index {row} is out of bounds for inlier data with size {self.n}. Skipping.")
+                continue
             logging.info(f"Processing sample {row}/{len(indices)}")
             eliminated_X = np.delete(self.XCopy, row, axis=0)
             self.model._validate_kernel_params(X=eliminated_X)
@@ -109,14 +99,36 @@ class DistThresholdFinder:
             dk.fit()
             x_opt = dk.solve()
             x_opt = x_opt * scale
-            x_opt = np.maximum(x_opt, self.lb)
+            x_opt = np.maximum(x_opt, np.zeros_like(x_opt))
             z[row, 0] = self.model.landa1 * np.sum(x_opt) + self.model.landa2 * np.linalg.norm(x_opt)
+            z[row, 0] *= 1e10  # Scale z to avoid numerical underflow
             logging.debug(f"z[{row}]={z[row, 0]:.4f}, x_opt_norm={np.linalg.norm(x_opt):.2e}")
-
+    
         if specific_index is not None:
-            return z[specific_index, 0], z[specific_index, 0]
-
+            if specific_index >= self.n:
+                logging.error(f"Specific index {specific_index} is out of bounds for inlier data with size {self.n}.")
+                return 0.0, 0.0, [1e-5]
+            return z[specific_index, 0], z[specific_index, 0], [1e-5]
+    
         if isinstance(outs, str):
-            return z, getattr(np, outs)(z)
-        return z, tuple(getattr(np, outs)(z) for func in outs)
-   
+            z_agg = getattr(np, outs)(z)
+            thrs = self._compute_thresholds(z, outs)
+            return z, z_agg, thrs
+        z_agg = tuple(getattr(np, outs)(z) for func in outs)
+        thrs = self._compute_thresholds(z, outs[0] if isinstance(outs, tuple) else 'max')
+        return z, z_agg, thrs
+
+    def _compute_thresholds(self, z, outs):
+        """
+        Compute thresholds based on z-scores.
+        """
+        min_z, max_z = np.min(z), np.max(z)
+        bound = max_z - min_z
+        coef = np.array([0.05, 0.2, 0.45, 0.76])
+        bound = coef * bound
+        thrs = np.concatenate((max_z - bound, max_z + bound))
+        thrs = thrs[thrs > 0]
+        if len(thrs) == 0:
+            logging.warning(f"No valid thresholds computed, using default [1e-5]")
+            thrs = [1e-5]
+        return thrs
