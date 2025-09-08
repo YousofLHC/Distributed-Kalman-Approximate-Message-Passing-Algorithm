@@ -15,7 +15,6 @@ DEFAULT_ZERO_DIVISION_CLASSIF: ZeroDivMode = "zero"
 DEFAULT_ZERO_DIVISION_RECON: ZeroDivMode = "epsilon"
 DEFAULT_EPS = 1e-12
 
-
 def safe_divide(
     num: np.ndarray | float,
     den: np.ndarray | float,
@@ -117,7 +116,6 @@ def calculate_metrics(y_true: np.ndarray, y_score: np.ndarray) -> dict:
     auc_pr = np.trapezoid(precision, recall)
     return {'auc_roc': auc_roc, 'auc_pr': auc_pr}
 
-
 def calculate_anomaly_detection_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     """
     Calculate anomaly detection metrics.
@@ -188,7 +186,6 @@ def calculate_anomaly_detection_metrics(y_true: np.ndarray, y_pred: np.ndarray) 
         'markedness': markedness
     }
 
-
 def calculate_compressive_sensing_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     """
     Calculate compressive sensing metrics.
@@ -203,42 +200,45 @@ def calculate_compressive_sensing_metrics(y_true: np.ndarray, y_pred: np.ndarray
     Returns
     -------
     dict
-        Dictionary containing nmse, peak_snr.
+        Dictionary containing nmse, mse, rmse, snr, peak_snr.
     """
-    mse = np.mean((y_true - y_pred) ** 2)
+    import logging
+    # Ensure inputs are float64 to improve numerical stability
+    y_true = np.asarray(y_true, dtype=np.float64).flatten()
+    y_pred = np.asarray(y_pred, dtype=np.float64).flatten()
+
+    # Check for invalid inputs
+    if np.any(np.isnan(y_true)) or np.any(np.isinf(y_true)) or np.any(np.isnan(y_pred)) or np.any(np.isinf(y_pred)):
+        logging.warning(f"Invalid values in y_true or y_pred: y_true_norm={np.linalg.norm(y_true):.2e}, y_pred_norm={np.linalg.norm(y_pred):.2e}")
+        return {'mse': float('inf'), 'rmse': float('inf'), 'nmse': float('inf'), 'snr': 0.0, 'peak_snr': 0.0}
+
+    # Normalize signals to prevent overflow
+    max_val = max(np.max(np.abs(y_true)), np.max(np.abs(y_pred)), 1e-6)  # Increased minimum to 1e-6
+    y_true = safe_divide(y_true, max_val, mode="epsilon", epsilon=DEFAULT_EPS, warn=False)
+    y_pred = safe_divide(y_pred, max_val, mode="epsilon", epsilon=DEFAULT_EPS, warn=False)
+
+    # Compute MSE with clipping to avoid overflow
+    diff = y_true - y_pred
+    diff = np.clip(diff, -1e10, 1e10)  # Prevent extreme values
+    mse = np.mean(diff ** 2)
     rmse = np.sqrt(mse)
 
     # NMSE: Normalized Mean Squared Error
     signal_power = np.var(y_true)
-    if signal_power == 0:
-        # Constant signal - NMSE is undefined, use MSE instead
-        nmse = mse if mse > 0 else 0.0
-    else:
-        nmse = safe_divide(mse, signal_power, mode="epsilon", epsilon=DEFAULT_EPS, warn=False)
+    nmse = safe_divide(mse, signal_power, mode="epsilon", epsilon=DEFAULT_EPS, warn=False) if signal_power > 0 else (mse if mse > 0 else 0.0)
 
     # SNR: Signal-to-Noise Ratio
-    if mse == 0:
-        snr = float('inf')
-    else:
-        mse_clamped = max(mse, DEFAULT_EPS)
-        signal_power = max(np.var(y_true), DEFAULT_EPS)  # Ensure non-zero for log
-        snr_ratio = safe_divide(signal_power, mse_clamped, mode="epsilon", epsilon=DEFAULT_EPS, warn=False)
-        snr = 10 * np.log10(max(snr_ratio, DEFAULT_EPS))  # Ensure positive for log
+    mse_clamped = max(mse, DEFAULT_EPS)
+    signal_power = max(np.var(y_true), DEFAULT_EPS)
+    snr_ratio = safe_divide(signal_power, mse_clamped, mode="epsilon", epsilon=DEFAULT_EPS, warn=False)
+    snr = 10 * np.log10(max(snr_ratio, DEFAULT_EPS)) if not np.isnan(snr_ratio) and not np.isinf(snr_ratio) else float('inf')
 
     # Peak SNR (PSNR)
-    if mse == 0:
-        peak_snr = float('inf')
-    else:
-        mse_clamped = max(mse, DEFAULT_EPS)
-        peak_power = np.max(np.abs(y_true))**2
-        if peak_power == 0:
-            peak_snr = 0.0  # Zero signal
-        else:
-            psnr_ratio = safe_divide(peak_power, mse_clamped, mode="epsilon", epsilon=DEFAULT_EPS, warn=False)
-            peak_snr = 20 * np.log10(max(psnr_ratio, DEFAULT_EPS))  # Ensure positive for log
+    peak_power = np.max(np.abs(y_true))**2
+    psnr_ratio = safe_divide(peak_power, mse_clamped, mode="epsilon", epsilon=DEFAULT_EPS, warn=False) if peak_power > 0 else 0.0
+    peak_snr = 20 * np.log10(max(psnr_ratio, DEFAULT_EPS)) if not np.isnan(psnr_ratio) and not np.isinf(psnr_ratio) else float('inf')
 
     return {'mse': mse, 'rmse': rmse, 'nmse': nmse, 'snr': snr, 'peak_snr': peak_snr}
-
 
 def calculate_gmsd(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
@@ -274,7 +274,6 @@ def calculate_gmsd(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     gmsd = np.std(quality_map)
 
     return gmsd
-
 
 def calculate_fsim(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
@@ -313,7 +312,6 @@ def calculate_fsim(y_true: np.ndarray, y_pred: np.ndarray) -> float:
 
     return fsim
 
-
 def calculate_vif(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     """
     Calculate Visual Information Fidelity (VIF).
@@ -345,7 +343,6 @@ def calculate_vif(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     vif = np.mean((sigma_tp**2 + 0.01) / (sigma_true**2 * sigma_pred**2 + 0.01))
 
     return vif
-
 
 def calculate_ssim(y_true: np.ndarray, y_pred: np.ndarray, data_range: float = None) -> float:
     """
@@ -390,7 +387,6 @@ def calculate_ssim(y_true: np.ndarray, y_pred: np.ndarray, data_range: float = N
     ssim = numerator / denominator
     return ssim
 
-
 def calculate_phase_transition(successes: list, sparsities: list, measurement_rates: list) -> dict:
     """
     Calculate phase transition data for compressive sensing.
@@ -422,7 +418,6 @@ def calculate_phase_transition(successes: list, sparsities: list, measurement_ra
         phase_data[(sp, mr)] = success_prob
 
     return phase_data
-
 
 def track_convergence(iterations: int, runtime: float, tolerance: float = None, error_history: list = None) -> dict:
     """
@@ -457,7 +452,6 @@ def track_convergence(iterations: int, runtime: float, tolerance: float = None, 
 
     return metrics
 
-
 def log_results(results, filepath='results/logs/experiment_log.txt'):
     import time
     import os
@@ -468,7 +462,6 @@ def log_results(results, filepath='results/logs/experiment_log.txt'):
         for method, metrics in results.items():
             f.write(f"{method}: AUC-ROC = {metrics['auc_roc']:.4f}, Time = {metrics['time']:.2f}s\n")
         f.write("-" * 50 + "\n")
-
 
 def save_detailed_report(results, filepath='results/detailed_report.txt', format_type='txt'):
     """
@@ -618,7 +611,6 @@ def save_detailed_report(results, filepath='results/detailed_report.txt', format
             json.dump(report_data, f, indent=2)
 
     print(f"Detailed report saved to {filepath}")
-
 
 def save_experiment_summary(results, filepath='results/experiment_summary.txt'):
     """

@@ -37,6 +37,7 @@ def generate_synthetic_data(num_samples, num_features, sparsity, noise_std, rand
     return A, y, x_true_flat, x_true
 
 
+
 def create_measurement_matrix(m, n, matrix_type, random_state=None):
     """
     Generate a measurement matrix of specified type and dimensions.
@@ -75,18 +76,19 @@ def create_measurement_matrix(m, n, matrix_type, random_state=None):
     rng = np.random.default_rng(random_state)
 
     if matrix_type == "gaussian":
-        return rng.randn(m, n) / np.sqrt(m)
+        return rng.normal(0, 1 / np.sqrt(m), size=(m, n))
     elif matrix_type == "heavy":
         return rng.standard_t(df=2, size=(m, n)) / np.sqrt(m)
     elif matrix_type == "orthogonal":
         if m > n:
             raise ValueError("For orthogonal matrix type, m must be less than or equal to n.")
-        B = rng.randn(n, n)
+        B = rng.normal(0, 1, size=(n, n))
         Q, _ = np.linalg.qr(B)
         idx = rng.choice(n, size=m, replace=False)
         return Q[idx, :] * np.sqrt(n / m)
     else:
         raise ValueError("Unknown matrix type. Choose from 'gaussian', 'heavy', or 'orthogonal'.")
+
 
 def load_graph(adj_file):
     """Load graph from adjacency matrix file."""

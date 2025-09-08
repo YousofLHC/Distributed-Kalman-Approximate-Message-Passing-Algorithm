@@ -60,10 +60,19 @@ class AMP(BaseEstimator):
         self : AMP
             Fitted estimator.
         """
-        self.A = check_array(A)
-        self.y = check_array(y, ensure_2d=False).reshape(-1, 1)
+        self.A = check_array(A, dtype=np.float64)
+        self.y = check_array(y, ensure_2d=False, dtype=np.float64).reshape(-1, 1)
         self.m, self.n = self.A.shape
-        self.x = np.zeros((self.n, 1))
+        
+        # Normalize A and y to prevent large values
+        A_norm = np.linalg.norm(self.A, ord='fro')
+        y_norm = np.linalg.norm(self.y)
+        self.scale_A = max(A_norm, 1e-10)
+        self.scale_y = max(y_norm, 1e-10)
+        self.A = self.A / self.scale_A
+        self.y = self.y / self.scale_y
+        
+        self.x = np.zeros((self.n, 1), dtype=np.float64)
         self.is_fitted_ = True
         return self
 
@@ -79,22 +88,31 @@ class AMP(BaseEstimator):
         check_is_fitted(self, "is_fitted_")
         x = self.x.copy()
         z = self.y.copy()
-        for _ in range(self.max_iter):
+        for i in range(self.max_iter):
             x_prev = x.copy()
-            r = x + self.A.T @ z
-            x = self.denoiser(r, self.tau)
+            # Compute r with clipping to prevent overflow
+            r = x + np.clip(self.A.T @ z, -1e10, 1e10)
+            x = np.clip(self.denoiser(r, self.tau), -1e10, 1e10)
             # Use subdif_denoiser to compute the derivative for Onsager correction
             subdif = self.subdif_denoiser(r, self.tau)
-            # Compute the Onsager correction term using the mean of the sub-differential
-            onsager_term = np.mean(subdif) * z
-            z = self.y - self.A @ x + self.alpha * onsager_term
+            # Compute the Onsager correction term with clipping
+            onsager_term = np.clip(np.mean(subdif) * z, -1e10, 1e10)
+            z = np.clip(self.y - self.A @ x + self.alpha * onsager_term, -1e10, 1e10)
+            # Log debug information
+            import logging
+            logging.debug(f"Iteration {i}: x_norm={np.linalg.norm(x):.2e}, z_norm={np.linalg.norm(z):.2e}, r_norm={np.linalg.norm(r):.2e}")
             # Check for convergence
             diff_norm = np.linalg.norm(x - x_prev)
-            prev_norm = np.linalg.norm(x_prev) + 1e-8
-            if prev_norm > 0 and diff_norm / prev_norm < self.tol:
-                break
-            # Check for NaN/inf values
+            prev_norm = np.linalg.norm(x_prev)
+            if not np.isnan(diff_norm) and not np.isinf(diff_norm) and not np.isnan(prev_norm) and not np.isinf(prev_norm):
+                if prev_norm > 1e-4 and diff_norm / prev_norm < self.tol and not np.any(np.isnan(x)) and not np.any(np.isinf(x)):
+                    logging.debug(f"Converged at iteration {i}: diff_norm/prev_norm={diff_norm/prev_norm:.2e}")
+                    break
+            else:
+                logging.debug(f"Invalid norms in AMP.solve: diff_norm={diff_norm:.2e}, prev_norm={prev_norm:.2e}")
+            # Check for NaN/inf values in x
             if np.any(np.isnan(x)) or np.any(np.isinf(x)):
+                logging.debug(f"NaN or inf detected in x at iteration {i}: x_norm={np.linalg.norm(x):.2e}")
                 break
-        self.x = x
-        return x
+        self.x = x * self.scale_A * self.scale_y  # Rescale x to original scale
+        return self.x
