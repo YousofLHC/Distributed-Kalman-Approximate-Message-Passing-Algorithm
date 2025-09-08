@@ -6,6 +6,8 @@ from typing import List, Dict, Tuple, Union
 from ampire.core.kamp import KAMP
 from ampire.network.graph import MyGraph, Node
 from ampire.network.random_digraphs import create_strongly_connected_graph
+from ampire.network import create_dag
+from ampire.network import *
 class DistributedKAMP(KAMP):
     """
     Distributed Kalman Approximate Message Passing (DKAMP) for sparse signal recovery
