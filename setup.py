@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="ampire",
-    version="0.5.0",
+    version="0.9.0",
     author="YousfLHC",
     author_email="",
     description="Distributed Kalman Approximate Message Passing Algorithm",
