@@ -80,3 +80,22 @@ sampling__factor__outlier__shuttle    : 0.099 #! 348/3511
 
 
 
+################################################################################## SYNTHETIC DATA #########################################################################
+data__synthetic__pentagon            : "@str @jinja {{this.synthepath}}pentagon.csv"
+data__synthetic__moon                : "@str @jinja {{this.synthepath}}moon.csv"
+data__synthetic__moon_circle         : "@str @jinja {{this.synthepath}}moon-circle.csv"
+data__synthetic__disconnected        : "@str @jinja {{this.synthepath}}disconnected.csv"
+data__synthetic__non_convex_triangle : "@str @jinja {{this.synthepath}}non-convex-triangle.csv"
+data__synthetic__tri                 : "@str @jinja {{this.synthepath}}tri.csv"
+
+
+data__synthetic__all :
+  - "@str @jinja {{this.data__synthetic__pentagon}}"
+  - "@str @jinja {{this.data__synthetic__moon}}"
+  - "@str @jinja {{this.data__synthetic__moon_circle}}"
+  - "@str @jinja {{this.data__synthetic__disconnected}}"
+  - "@str @jinja {{this.data__synthetic__non_convex_triangle}}"
+  - "@str @jinja {{this.data__synthetic__tri}}"
+
+
+
