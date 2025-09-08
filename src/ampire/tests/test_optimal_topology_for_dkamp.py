@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import glob
+import sys
 import time
 import logging
 import pandas as pd
@@ -9,6 +10,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from itertools import product
 from sklearn.metrics import mean_squared_error
+sys.path.insert(0, 'src')
 from ampire.distributed.distributed_kamp import DistributedKAMP
 from ampire.network.graph import MyGraph
 from ampire.utils.metrics import safe_divide, DEFAULT_EPS, calculate_compressive_sensing_metrics, calculate_ssim, calculate_gmsd, calculate_fsim, calculate_vif
@@ -122,7 +124,7 @@ def grid_search_hyperparameters(A, y, x_true_flat, x_true_2d, G, param_grids, is
 def main():
     # Configuration
     config = {
-        'num_samples': 50,
+        'num_samples': 900,
         'noise_std': 0.01,
         'random_state': 42,
         'sparsity_levels': [0.1, 0.35, 0.9],
@@ -133,7 +135,7 @@ def main():
             'num_triggers': [50, 200]
         },
         'data_types': [
-            {'is_2d': False, 'name': 'complex_signal', 'num_features': 100, 'shape_2d': None},
+            {'is_2d': False, 'name': 'complex_signal', 'num_features': 700, 'shape_2d': None},
             {'is_2d': True, 'name': '2d_signal', 'num_features': 2, 'shape_2d': (1, 2)}
         ]
     }
@@ -209,7 +211,7 @@ def main():
             results_base_dir = f'{root}/results/distributed_kamp_modes_{data_name}_sparsity_{sparsity_percent}'
             plots_dir = base_plot_dir
             os.makedirs(plots_dir, exist_ok=True)
-
+            os.makedirs(results_base_dir, exist_ok=True)
             # Process topologies
             for adj_file in tqdm(adj_files, desc="Processing graphs"):
                 G, num_nodes = load_graph(adj_file)
