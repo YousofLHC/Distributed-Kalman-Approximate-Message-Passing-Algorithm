@@ -3,6 +3,7 @@ import numpy as np
 from scipy.linalg import solve_triangular
 from sklearn.metrics.pairwise import pairwise_kernels
 from ampire.distributed import DistributedKAMP
+from ampire.distributed import DistEnetConvexHull
 from tqdm import tqdm
 import logging
 import os
@@ -87,6 +88,8 @@ class DistThresholdFinder:
         for row, x in (tqz := tqdm(enumerate(self.X), leave=False, total=self.n, desc="Calculating z")):
             tqz.set_description(f'z[{row}]')
             eliminated_X = np.delete(self.XCopy, row, axis=0)
+            # Validate kernel parameters for eliminated_X
+            self.model._validate_kernel_params(X=eliminated_X)
             G = pairwise_kernels(eliminated_X, metric=self.model.metric, **self.model.kernel_params)
             P = self.model._calculate_P(eliminated_X)
             Ky = pairwise_kernels(eliminated_X, x.reshape((1, self.m)),

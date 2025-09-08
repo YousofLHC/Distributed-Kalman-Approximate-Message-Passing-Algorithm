@@ -567,13 +567,15 @@ class ThresholdFinder:
     def find(self, outs='max'):
         z = np.zeros((self.n, 1))
         for row, x in (tqz:=tqdm(enumerate(self.X), leave=False, total=self.n, desc="Calculating z")):
-            tqz.set_description(f'z[{row}]')
+            tqz.set_description(f'z[{row}]')            
             eliminated_X = np.delete(self.XCopy, row, axis=0)
-            G            = pairwise_kernels(eliminated_X,metric=self.model.metric, **self.model.kernel_params)
-            P            = self.model._calculate_P(G)
-            Ky           = pairwise_kernels(eliminated_X, x.reshape((1,self.m)),
-                                            metric=self.model.metric, **self.model.kernel_params)
-            q            = self.model._calculate_q(G, Ky)
+            # Validate kernel parameters for eliminated_X
+            self.model._validate_kernel_params(X=eliminated_X)
+            G = pairwise_kernels(eliminated_X, metric=self.model.metric, **self.model.kernel_params)
+            P = self.model._calculate_P(eliminated_X)
+            Ky = pairwise_kernels(eliminated_X, x.reshape((1, self.m)),
+                                  metric=self.model.metric, **self.model.kernel_params)
+            q = self.model._calculate_q(G, Ky)
             
             x_opt        = solve_qp(2*P, q, lb=self.lb, solver=self.model.solver)
             z[row, 0] = self.model.landa1 * np.sum(x_opt) + self.model.landa2 * np.linalg.norm(x_opt)

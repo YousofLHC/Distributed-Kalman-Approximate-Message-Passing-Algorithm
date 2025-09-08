@@ -133,14 +133,22 @@ class DistEnetConvexHull(BaseEstimator, OutlierMixin):
         if not isinstance(self.just_dag, bool):
             raise ValueError(f"just_dag ({self.just_dag}) must be a boolean.")
 
-    def _validate_kernel_params(self):
-        """Validate kernel-specific parameters."""
+    def _validate_kernel_params(self, X=None):
+        """Validate and adjust kernel-specific parameters."""
         if self.metric is None:
             raise ValueError("The kernel metric must be specified.")
         if self.metric in {'poly', 'rbf', 'sigmoid'}:
             gamma = self.kernel_params.get('gamma', 'scale')
-            if not (isinstance(gamma, (int, float)) or gamma in {'scale', 'auto'}):
-                raise ValueError(f"Invalid gamma value: {gamma}. Must be 'scale', 'auto', or a number.")
+            if X is not None and isinstance(gamma, str):
+                if gamma == 'scale':
+                    n_features = X.shape[1]
+                    self.kernel_params['gamma'] = 1.0 / (n_features * X.var()) if X.var() > 0 else 1.0
+                elif gamma == 'auto':
+                    self.kernel_params['gamma'] = 1.0 / X.shape[1]
+                else:
+                    raise ValueError(f"Invalid gamma value: {gamma}. Must be 'scale', 'auto', or a number.")
+            elif not isinstance(gamma, (int, float)):
+                raise ValueError(f"Invalid gamma value: {gamma}. Must be a number after validation.")
         if self.metric == 'poly':
             degree = self.kernel_params.get('degree', None)
             if degree is None or not isinstance(degree, int) or degree <= 0:
@@ -149,7 +157,7 @@ class DistEnetConvexHull(BaseEstimator, OutlierMixin):
             coef0 = self.kernel_params.get('coef0', None)
             if coef0 is not None and not isinstance(coef0, (int, float)):
                 raise ValueError(f"Invalid coef0 value: {coef0}. Must be a number.")
-
+        
     def _adjust_kernel(self, X, Y=None):
         """Compute adjusted pairwise kernel similarity matrix."""
         if Y is None:
@@ -165,6 +173,31 @@ class DistEnetConvexHull(BaseEstimator, OutlierMixin):
         BTB = self._adjust_kernel(X)
         P = (self.landa2 * np.identity(X.shape[0])) + BTB
         return P
+
+    def _calculate_q(self, G: np.ndarray, Ky: np.ndarray) -> np.ndarray:
+        """
+        ONLY FOR THRESHOLDFINDER. NEED REFACTOR FOR ENETCONVEXHULL CLASS
+        Calculate vector q for the quadratic problem.
+        it is used for ThresholdFinder
+        Parameters
+        ----------
+        G : ndarray of shape (n_samples, n_samples)
+            Adjusted kernel matrix.
+        Ky : ndarray of shape (n_samples, 1)
+            Kernel similarity vector between X_target and a sample.
+
+        Returns
+        -------
+        q : ndarray of shape (n_samples, 1)
+            Vector q for quadratic programming.
+        """
+        n = G.shape[0]
+        G_sum = G.sum()
+        Ky_sum = Ky.sum()
+        row_sum = G.sum(axis=1, keepdims=True)
+        h = Ky - (Ky_sum + row_sum) / n + G_sum / (n ** 2)
+        return self.landa1 * np.ones((n, 1)) - 2 * h
+
 
     def _create_default_graph(self, num_nodes):
         """Create a default DAG for DistributedKAMP."""
@@ -218,7 +251,7 @@ class DistEnetConvexHull(BaseEstimator, OutlierMixin):
         """
         # Validate parameters and inputs
         self._validate_params()
-        self._validate_kernel_params()
+        self._validate_kernel_params(X=X)  # Pass X to compute gamma if needed
         if y is not None:
             X, y = check_X_y(X, y, accept_sparse=False, ensure_2d=True, dtype=np.float64)
             self.return_label = True
