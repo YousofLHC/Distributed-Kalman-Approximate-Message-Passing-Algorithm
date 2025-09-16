@@ -161,6 +161,19 @@ class DistEnetConvexHull(BaseEstimator, ClassifierMixin):
         scale_y = max(y_norm, 1e-10)
         A = A / scale_A
         y = y / scale_y
+        # Use the number of nodes from the graph
+        num_nodes = len(self.graph.nodes) if self.graph is not None else 1
+        if num_nodes == 1:
+            A_list = [A]
+            y_list = [y]
+        else:
+            A_list = np.array_split(A, num_nodes, axis=0)
+            y_list = np.array_split(y, num_nodes, axis=0)
+        if len(A_list) != num_nodes or len(y_list) != num_nodes:
+            logging.error(f"Mismatch in A_list (len={len(A_list)}) and y_list (len={len(y_list)}) with graph nodes ({num_nodes})")
+            raise ValueError(f"Mismatch in A_list and y_list lengths with graph nodes: {len(A_list)}, {len(y_list)}, {num_nodes}")
+        logging.info(f"Converted QP to KAMP: num_nodes={num_nodes}, A_list length={len(A_list)}, y_list length={len(y_list)}")
+        return A_list, y_list, scale_A * scale_y
 
         num_nodes = min(5, A.shape[0])
         A_list = np.array_split(A, num_nodes, axis=0)
