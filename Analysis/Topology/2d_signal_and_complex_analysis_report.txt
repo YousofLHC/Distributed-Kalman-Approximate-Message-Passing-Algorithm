@@ -1,0 +1,34 @@
+================================================================================
+TOPOLOGY PERFORMANCE ANALYSIS REPORT - Data Type: 2D Signal And Complex
+================================================================================
+
+--- Overall Best Performing Topology ---
+Based on the average rank across all metrics, the best topology is: 'Bidirectional'
+with an average rank of 1.00.
+
+--- Best Topology per Metric ---
+'nmse_global': 'Bidirectional'
+'rmse_global': 'Bidirectional'
+'snr_global': 'Bidirectional'
+'peak_snr_global': 'Bidirectional'
+'mse_global': 'Bidirectional'
+
+--- Statistical Test Results ---
+Metric 'nmse_global' - Kruskal-Wallis Test: Statistic = 1.777, p-value = 0.939
+Metric 'rmse_global' - Kruskal-Wallis Test: Statistic = 1.777, p-value = 0.939
+Metric 'snr_global' - Kruskal-Wallis Test: Statistic = 0.092, p-value = 1.000
+Metric 'peak_snr_global' - Kruskal-Wallis Test: Statistic = 0.092, p-value = 1.000
+Metric 'mse_global' - Kruskal-Wallis Test: Statistic = 1.777, p-value = 0.939
+
+--- Detailed Ranking Table ---
+                                nmse_global  rmse_global  snr_global  peak_snr_global  mse_global  average_rank
+topology_name                                                                                                  
+Bidirectional                           1.0          1.0         1.0              1.0         1.0           1.0
+DAG                                     2.0          2.0         3.0              3.0         2.0           2.4
+Directed with Cycles                    3.0          3.0         2.0              2.0         3.0           2.6
+Leafs to Final Node                     4.0          4.0         4.0              4.0         4.0           4.0
+Directed with Cycles and Loops          5.0          5.0         5.0              5.0         5.0           5.0
+Star with Extra Edges                   6.0          6.0         6.0              6.0         6.0           6.0
+Tree with Leaf Connections              7.0          7.0         7.0              7.0         7.0           7.0
+
+================================================================================
